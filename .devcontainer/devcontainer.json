@@ -1,0 +1,9 @@
+{
+  "image": "harsonlau/riscv-tools:latest",
+
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-vscode.cpptools-extension-pack"]
+    }
+  }
+}
