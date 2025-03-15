@@ -1,0 +1,27 @@
+-------Build Simulator-------
+make[1]: Entering directory '/nfs-share/home/2401213331/simulator/sim'
+make[1]: Nothing to be done for 'all'.
+make[1]: Leaving directory '/nfs-share/home/2401213331/simulator/sim'
+-------Build Test-------
+make[1]: Entering directory '/nfs-share/home/2401213331/simulator/test'
+make[1]: Nothing to be done for 'all'.
+make[1]: Leaving directory '/nfs-share/home/2401213331/simulator/test'
+-------Start Simulation-------
+[1;34m[INFO] (src/memory.c:54) Physical Memory Range:[0000000080000000, 0000000087ffffff].
+[0m[1;34m[INFO] (src/memory.c:60) The image is test/build/dummy.bin, size = 57.
+[0m[1;34m[INFO] (src/cpu.c:19) pc:80000000
+[0m[1;34m[INFO] (src/cpu.c:19) pc:80000004
+[0m[1;34m[INFO] (src/cpu.c:19) pc:80000008
+[0m[1;34m[INFO] (src/cpu.c:19) pc:8000000c
+[0m[1;34m[INFO] (src/cpu.c:19) pc:80000018
+[0m[1;34m[INFO] (src/cpu.c:19) pc:8000001c
+[0m[1;34m[INFO] (src/cpu.c:19) pc:80000020
+[0m[1;34m[INFO] (src/cpu.c:19) pc:80000024
+[0m[1;34m[INFO] (src/cpu.c:19) pc:80000028
+[0m[1;34m[INFO] (src/cpu.c:19) pc:80000010
+[0m[1;34m[INFO] (src/cpu.c:19) pc:80000014
+[0m[1;34m[INFO] (src/cpu.c:19) pc:8000002c
+[0m[1;34m[INFO] (src/cpu.c:19) pc:80000030
+[0m[1;34m[INFO] (src/cpu.c:36) Program ended at pc 80000030, with exit code 0.
+[0m[1;32mHIT GOOD TRAP!
+[0m
