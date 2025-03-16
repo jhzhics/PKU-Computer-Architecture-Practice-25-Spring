@@ -1,6 +1,5 @@
 #include <common.h>
-
-extern uint8_t* mem;
+#include <state.h>
 
 uint8_t* guest_to_host(uint64_t addr) {return mem + addr - MEM_BASE;}
 

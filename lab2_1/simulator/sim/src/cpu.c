@@ -1,9 +1,7 @@
 #include <common.h>
 #include <decode.h>
 #include <memory.h>
-
-CPU_state cpu = {};
-static int running = 1;
+#include <state.h>
 
 void init_cpu(){
     cpu.pc = MEM_BASE;

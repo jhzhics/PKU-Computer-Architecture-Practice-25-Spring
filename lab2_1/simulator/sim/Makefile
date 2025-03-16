@@ -8,7 +8,7 @@ SIMULATOR = $(BUILD)/Simulator
 CC  = gcc
 CXX = g++
 LD  = $(CC)
-CFLAGS   = -I./include -Wall
+CFLAGS   = -I./include -Wall -g
 CXXFLAGS = $(CFLAGS)
 
 ## 3. Rules

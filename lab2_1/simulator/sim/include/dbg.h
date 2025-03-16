@@ -39,12 +39,13 @@
 
 #define log_info(M, ...) fprintf(stderr, ANSI_FMT("[INFO] (%s:%d) " M "\n", ANSI_FG_BLUE), __FILE__, __LINE__, ##__VA_ARGS__)
 
-#define check(A, M, ...) if(!(A)) { log_err(M, ##__VA_ARGS__); errno=0; goto error; }
+#define check(A, M, ...) if(!(A)) { log_err(M, ##__VA_ARGS__); errno=0; exit_failure(); }
 
-#define sentinel(M, ...)  { log_err(M, ##__VA_ARGS__); errno=0; goto error; }
+#define sentinel(M, ...)  { log_err(M, ##__VA_ARGS__); errno=0; exit_failure(); }
 
 #define check_mem(A) check((A), "Out of memory.")
 
-#define check_debug(A, M, ...) if(!(A)) { debug(M, ##__VA_ARGS__); errno=0; goto error; }
+#define check_debug(A, M, ...) if(!(A)) { debug(M, ##__VA_ARGS__); errno=0; exit_failure(); }
 
 #endif
+

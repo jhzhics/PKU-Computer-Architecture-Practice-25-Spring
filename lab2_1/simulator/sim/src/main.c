@@ -1,20 +1,39 @@
 #include <common.h>
 #include <memory.h>
 #include <cpu.h>
+#include <monitor.h>
+#include <state.h>
+#include <string.h>
 
-uint8_t *mem = NULL;
+static const char * CLI_HELP = 
+"Usage: Simulator  --[batch|debug] image_path\n";
+
+static void exit_wrong_usage()
+{
+    printf("%s", CLI_HELP);
+    exit(1);
+}
 
 int main(int argc, char *argv[]){
-    mem = (uint8_t *)malloc(MEM_SIZE);
-    check_mem(mem);
-    memset(mem, 0, MEM_SIZE);
-    load_image(argv[1]);
-    init_cpu();
-    cpu_exec();
-    free(mem);
-    return 0;
+    if (argc != 3)
+    {
+        exit_wrong_usage();
+    }
 
-error:
-    if(mem) free(mem);
-    return -1;
+    if (!strcmp(argv[1], "--batch"))
+    {
+        init_state(argv[2]);
+        cpu_exec();
+        exit_success();
+    } else if (!strcmp(argv[1], "--debug"))
+    {
+        while(monitor());
+    }
+    else
+    {
+        exit_wrong_usage();
+    }
+
+
+    return 0;
 }
