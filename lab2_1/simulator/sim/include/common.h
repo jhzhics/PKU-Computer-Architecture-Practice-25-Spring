@@ -10,9 +10,10 @@
 
 #define MEM_SIZE 0x8000000
 #define MEM_BASE 0x80000000
+#define REG_N 32
 
 typedef struct {
-    uint64_t reg[32];
+    uint64_t reg[REG_N];
     uint64_t pc;
 } CPU_state;
 

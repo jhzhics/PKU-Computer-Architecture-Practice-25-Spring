@@ -9,6 +9,12 @@
 
 #define BUFFER_SIZE 64
 
+int is_little_endian() {
+    unsigned int x = 1;
+    char *c = (char*)&x;
+    return *c;
+}
+
 enum CommandType
 {
     Help,
@@ -31,7 +37,7 @@ struct Command
 
         struct {
             size_t nbytes;
-            int64_t addr;
+            uint64_t addr;
         } examine_args;
     };
 };
@@ -56,19 +62,31 @@ static struct Command parse(const char *command_buffer)
     else if (!strcmp(buf1, "si"))
     {
         cmd.type = Step;
-        sscanf(command_buffer, "%*s %s", buf1);
-        cmd.step_args.step_n = atoi(buf1);
+        int cnt = sscanf(command_buffer, "%*s %s", buf1);
+        cmd.step_args.step_n = cnt != -1 ? atoi(buf1) : 1;
     }
     else if (!strcmp(buf1, "info"))
     {
         cmd.type = Info;
+        int cnt = sscanf(command_buffer, "%*s %s", buf1);
+        if(cnt == -1 || strcmp(buf1, "r"))
+        {
+            cmd.type = Invalid;
+        }
     }
     else if (!strcmp(buf1, "x"))
     {
         cmd.type = Examine;
-        sscanf(command_buffer, "%*s %s %s", buf1, buf2);
-        cmd.examine_args.addr = atol(buf1);
-        cmd.examine_args.nbytes = atol(buf2);
+        int cnt = sscanf(command_buffer, "%*s %s %s", buf1, buf2);
+        if (cnt != 2)
+        {
+            cmd.type = Invalid;
+        }
+        else
+        {
+            cmd.examine_args.nbytes = atol(buf1);
+            cmd.examine_args.addr = strtoul(buf2, NULL, 16);
+        }
     }
     else
     {
@@ -85,9 +103,64 @@ static void excute_help()
     "q: exit the simulator\n"
     "si [N]: single step N times (default 1)\n"
     "info r: print register status\n"
-    "x N ADDR: print N bytes at ADDR of the memory\n";
+    "x N ADDR(Hex): print 4N bytes at ADDR of the memory. ";
 
-    printf("%s", HELP_MESSAGE);
+    printf("%s%s\n", HELP_MESSAGE, is_little_endian() ? "Show in little endian" : "Show in big endian");
+}
+
+static void exec_step(int n)
+{
+    int cnt = 0;
+    for(int i = 0; i < n && running; i++)
+    {
+        cnt++;
+        exec_once();
+    }
+    log_info("Excute %d steps successfully", cnt);
+}
+
+static void excute_info()
+{
+    printf("PC  : 0x%016lx\n", cpu.pc);
+    for(int i = 0; i < REG_N; i += 2)
+    {
+        printf("x%-2d : 0x%016lx\tx%-2d : 0x%016lx\n", i, cpu.reg[i], i + 1, cpu.reg[i + 1]);
+    }
+}
+
+static void excute_examine(uint64_t vaddr , int n)
+{
+    int is_invalid = 0;
+    int last = 0; int first = 1;
+    for (int i = 0; i < n; i++)
+    {
+        uint32_t *addr = guest_to_host(vaddr + 4 * i);
+        if (addr + 1 > (uint32_t *)(mem + MEM_SIZE) || vaddr < MEM_BASE)
+        {
+            is_invalid = 1;
+            continue;
+        }
+        if(last++ == 0)
+        {
+            if(first)
+            {
+                first = 0;
+            }
+            else
+            {
+                putc('\n', stdout);
+            }
+            printf("0x%016lx :", vaddr + 4 * i);
+        }
+        printf(" %08x", *addr);
+        last %= 4;
+    }
+    if (!first) putc('\n', stdout);
+    if(is_invalid)
+    {
+        log_info("Try to read inaccessible memory");
+    }
+    fflush(stdout);
 }
 
 int monitor()
@@ -116,14 +189,19 @@ int monitor()
         excute_help();
         break;
         case Continue:
+        cpu_exec();
         break;
         case Quit:
+        exit_success();
         break;
         case Step:
+        exec_step(cmd.step_args.step_n);
         break;
         case Info:
+        excute_info();
         break;
         case Examine:
+        excute_examine(cmd.examine_args.addr, cmd.examine_args.nbytes);
         break;
         case Invalid:
         log_info("Invalid Command");
@@ -131,5 +209,5 @@ int monitor()
         break;
     }
 
-    return 1;
+    return running;
 }

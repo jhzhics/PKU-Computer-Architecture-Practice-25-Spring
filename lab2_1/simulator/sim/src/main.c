@@ -20,9 +20,9 @@ int main(int argc, char *argv[]){
         exit_wrong_usage();
     }
 
+    init_state(argv[2]);
     if (!strcmp(argv[1], "--batch"))
     {
-        init_state(argv[2]);
         cpu_exec();
         exit_success();
     } else if (!strcmp(argv[1], "--debug"))
