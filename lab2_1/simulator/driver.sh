@@ -6,7 +6,6 @@ DIR="test/src"
 targets=$(find "$DIR" -type f)
 targets_count=$(echo "$targets" | wc -l)
 success_count=0
-echo $targets_count
 
 for line in $targets; do
     target=$(echo $line | sed -E "s|.+\/([^\/]+)\.c|\1|")
