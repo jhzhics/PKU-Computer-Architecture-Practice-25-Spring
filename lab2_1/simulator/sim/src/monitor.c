@@ -116,7 +116,7 @@ static void exec_step(int n)
         cnt++;
         exec_once();
     }
-    log_info("Excute %d steps successfully", cnt);
+    log_info("Excute %d steps successfully. PC:0x%016lx", cnt, cpu.pc);
 }
 
 static void excute_info()

@@ -46,7 +46,7 @@ $(BUILD)/%.elf: $(addprefix $(BUILD)/objs/, %.o trm.o start.o)
 
 $(BUILD)/%.bin: $(BUILD)/%.elf
 	@echo + OBJDUMP "->" $(patsubst %.elf, %.txt, $<)
-	@$(OBJDUMP) -d $< > $(patsubst %.elf, %.txt, $<)
+	@$(OBJDUMP) -d -M no-aliases $< > $(patsubst %.elf, %.txt, $<)
 	@echo + OBJCOPY "->" $@
 	@$(OBJCOPY) -S --set-section-flags .bss=alloc,contents -O binary $< $@
 
