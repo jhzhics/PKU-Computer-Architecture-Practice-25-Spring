@@ -13,7 +13,8 @@ extern CPU_state cpu;
 
 enum {
   TYPE_I, TYPE_U, TYPE_S,
-  TYPE_N, TYPE_J
+  TYPE_N, TYPE_J, TYPE_SB,
+  TYPE_R
 };
 
 #define src1R() do { *src1 = R(rs1); } while (0)
@@ -25,7 +26,10 @@ enum {
                                 BITS(i, 20, 20) << 11 | \
                                 BITS(i, 30, 21) << 1, 21);} while(0)
 #define immS() do { *imm = (SEXT(BITS(i, 31, 25), 7) << 5) | BITS(i, 11, 7); } while(0)
-
+#define immSB() do { *imm = SEXT(BITS(i, 31, 31) << 12 | \
+                                 BITS(i,  7, 7)  << 11 | \
+                                 BITS(i, 30, 25) << 5  | \
+                                 BITS(i, 11, 8)  << 1  , 13);} while(0)
 static void decode_operand(Decode *s, int *rd, uint64_t *src1, uint64_t *src2, uint64_t *imm, int type){
     uint32_t i = s->inst;
     int rs1 = BITS(i, 19, 15);
@@ -36,6 +40,8 @@ static void decode_operand(Decode *s, int *rd, uint64_t *src1, uint64_t *src2, u
         case TYPE_U:                   immU(); break;
         case TYPE_J:                   immJ(); break;
         case TYPE_S: src1R(); src2R(); immS(); break;
+        case TYPE_SB: src1R(); src2R(); immSB(); break;
+        case TYPE_R: src1R(); src2R(); break;
     }
 }
 void decode_exec(Decode *s){
@@ -49,13 +55,19 @@ void decode_exec(Decode *s){
   __VA_ARGS__ ; \
 }
     INSTPAT_START();
-    //RV64IM
+    //RV64I
+    INSTPAT("??????? ????? ????? ??? ????? 01101 11", lui    , U, R(rd) = imm & 0xfffff000);
     INSTPAT("??????? ????? ????? ??? ????? 00101 11", auipc  , U, R(rd) = s->pc + imm);
     INSTPAT("??????? ????? ????? ??? ????? 11011 11", jal    , J, R(rd) = s->pc + 4, s->dnpc = s->pc + imm);
     INSTPAT("??????? ????? ????? 000 ????? 11001 11", jalr   , I, R(rd) = s->pc + 4, s->dnpc = (src1 + imm) & ~1);
+    INSTPAT("??????? ????? ????? 000 ????? 11000 11", beq    , SB, if(src1 == src2) s->dnpc = s->pc + imm);
+
+
     INSTPAT("??????? ????? ????? 011 ????? 01000 11", sd     , S, Mw(src1 + imm, 8, src2));
     INSTPAT("??????? ????? ????? 000 ????? 00100 11", addi   , I, R(rd) = src1 + imm);
     INSTPAT("0000000 00001 00000 000 00000 11100 11", ebreak , N, HALT(s->pc, R(10))); // R(10) is $a0
+
+    //RV64M
 
     //Invalid Opcode
     INSTPAT("??????? ????? ????? ??? ????? ????? ??", unk    , N, printf(ANSI_FMT("Unknown Inst!\n", ANSI_FG_RED)), HALT(s->pc, -1));
