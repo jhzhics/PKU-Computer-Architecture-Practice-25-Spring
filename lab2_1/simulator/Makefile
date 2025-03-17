@@ -7,7 +7,7 @@ all:
 	@echo "-------Build Test-------"
 	@$(MAKE) -C test T=$(T)
 	@echo "-------Start Simulation-------"
-	@$(SIM) $(TARGET)
+	@$(SIM) --batch $(TARGET)
 
 clean:
 	@$(MAKE) -C sim clean
