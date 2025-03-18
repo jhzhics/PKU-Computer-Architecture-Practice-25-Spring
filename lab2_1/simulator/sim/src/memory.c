@@ -35,7 +35,7 @@ error:
 }
 
 uint64_t mem_read(uint64_t addr, int len){
-    check(addr - MEM_BASE < MEM_SIZE, "Read addr %016lx out of bound.", addr);
+    check(addr - MEM_BASE < MEM_SIZE, "Read addr %016lx out of bound. PC %08lx", addr, cpu.pc);
     uint64_t ret = host_read(guest_to_host(addr), len);
     return ret;
 error:
@@ -43,7 +43,7 @@ error:
 }
 
 void mem_write(uint64_t addr, int len, uint64_t data){
-    check(addr - MEM_BASE < MEM_SIZE, "Write addr %016lx out of bound.", addr);
+    check(addr - MEM_BASE < MEM_SIZE, "Write addr %016lx out of bound. PC %08lx", addr, cpu.pc);
     host_write(guest_to_host(addr), len, data);
 error:
     return;

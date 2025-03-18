@@ -5,6 +5,7 @@
 uint8_t *mem = NULL;
 CPU_state cpu = {};
 int running = 1;
+uint64_t prog_brk = MEM_BASE + MEM_SIZE;
 
 void exit_failure()
 {

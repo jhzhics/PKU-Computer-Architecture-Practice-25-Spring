@@ -8,6 +8,7 @@
 extern uint8_t *mem;
 extern CPU_state cpu;
 extern int running;
+extern uint64_t prog_brk;
 
 void init_state(const char *image);
 void exit_failure();

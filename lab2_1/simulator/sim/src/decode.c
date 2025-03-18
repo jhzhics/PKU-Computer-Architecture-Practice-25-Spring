@@ -138,7 +138,7 @@ void decode_exec(Decode *s){
     INSTPAT("??????? ????? ????? ??? ????? 0010111", auipc,U, R(rd) = s->pc + imm);                          // PC 相对立即数加法
 
     // RV64I: 系统指令 (opcode: 1110011)
-    INSTPAT("0000000 00000 00000 000 00000 1110011", ecall, N, HALT(s->pc, 0));                             // 系统调用（暂作为暂停）
+    INSTPAT("0000000 00000 00000 000 00000 1110011", ecall, N, if (!upcall()) halt_trap(s->pc ,1));                             // 系统调用（暂作为暂停）
     INSTPAT("0000000 00001 00000 000 00000 1110011", ebreak,N, HALT(s->pc, R(10)));                         // 断点
 
     // RV64M: 乘法指令 (opcode: 0110011, funct7: 0000001)
