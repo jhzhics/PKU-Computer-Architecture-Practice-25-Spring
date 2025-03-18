@@ -8,6 +8,13 @@
 #include <stdlib.h>
 
 #define BUFFER_SIZE 64
+#define MAX_BREAK_POINTS 10
+
+struct
+{
+    uint64_t break_points[MAX_BREAK_POINTS];
+    size_t break_n;
+} static prog_debug;
 
 int is_little_endian() {
     unsigned int x = 1;
@@ -23,6 +30,8 @@ enum CommandType
     Step,
     Info,
     Examine,
+    Break,
+    Delete,
     Invalid
 };
 
@@ -39,6 +48,10 @@ struct Command
             size_t nbytes;
             uint64_t addr;
         } examine_args;
+
+        struct {
+            uint64_t addr;
+        } break_args;
     };
 };
 
@@ -65,7 +78,7 @@ static struct Command parse(const char *command_buffer)
         int cnt = sscanf(command_buffer, "%*s %s", buf1);
         cmd.step_args.step_n = cnt != -1 ? atoi(buf1) : 1;
     }
-    else if (!strcmp(buf1, "info"))
+    else if (!strcmp(buf1, "i"))
     {
         cmd.type = Info;
         int cnt = sscanf(command_buffer, "%*s %s", buf1);
@@ -88,6 +101,23 @@ static struct Command parse(const char *command_buffer)
             cmd.examine_args.addr = strtoul(buf2, NULL, 16);
         }
     }
+    else if (!strcmp(buf1, "b"))
+    {
+        cmd.type = Break;
+        int cnt = sscanf(command_buffer, "%*s %s", buf1);
+        if (cnt != 1)
+        {
+            cmd.type = Invalid;
+        }
+        else
+        {
+            cmd.break_args.addr = strtoul(buf1, NULL, 16);
+        }
+    }
+    else if (!strcmp(buf1, "d"))
+    {
+        cmd.type = Delete;
+    }
     else
     {
         cmd.type = Invalid;
@@ -102,9 +132,10 @@ static void excute_help()
     "c: continue the stopped program\n"
     "q: exit the simulator\n"
     "si [N]: single step N times (default 1)\n"
-    "info r: print register status\n"
+    "i r: print register status\n"
+    "b ADDR(Hex): set a breakpoint at ADDR\n"
+    "d: delete all breakpoints"
     "x N ADDR(Hex): print 4N bytes at ADDR of the memory. ";
-
     printf("%s%s\n", HELP_MESSAGE, is_little_endian() ? "Show in little endian" : "Show in big endian");
 }
 
@@ -163,6 +194,49 @@ static void excute_examine(uint64_t vaddr , int n)
     fflush(stdout);
 }
 
+static void exec_delete()
+{
+    prog_debug.break_n = 0;
+    log_info("Break Points Deleted");
+}
+
+static void exec_break(uint64_t addr)
+{
+    if (prog_debug.break_n >= MAX_BREAK_POINTS)
+    {
+        log_warn("Have reached max breakpoints. Adding 0x%016lx breakpoint failed.", addr);
+        return;
+    }
+    prog_debug.break_points[prog_debug.break_n++] = addr;
+    log_warn("Adding 0x%016lx breakpoint succeeded.", addr);
+}
+
+
+static int hit_breakpoint(int64_t addr)
+{
+    for(int i = 0; i < prog_debug.break_n; i++)
+    {
+        if(prog_debug.break_points[i] == addr)
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void exec_continue()
+{
+    while (running)
+    {
+        exec_once();
+        if(hit_breakpoint(cpu.pc))
+        {
+            log_info("Hit breakpoints 0x%016lx.", cpu.pc);
+            break;
+        }
+    }
+}
+
 int monitor()
 {
     static int iter = 0;
@@ -189,7 +263,7 @@ int monitor()
         excute_help();
         break;
         case Continue:
-        cpu_exec();
+        exec_continue();
         break;
         case Quit:
         exit_success();
@@ -202,6 +276,12 @@ int monitor()
         break;
         case Examine:
         excute_examine(cmd.examine_args.addr, cmd.examine_args.nbytes);
+        break;
+        case Break:
+        exec_break(cmd.break_args.addr);
+        break;
+        case Delete:
+        exec_delete();
         break;
         case Invalid:
         log_info("Invalid Command");
