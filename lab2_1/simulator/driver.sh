@@ -6,7 +6,8 @@ DIR="test/src"
 targets=$(find "$DIR" -type f)
 targets_count=$(echo "$targets" | wc -l)
 success_count=0
-
+echo "Build Simulator..."; make -C sim &> /dev/null
+echo "Simulator building finished."
 for line in $targets; do
     target=$(echo $line | sed -E "s|.+\/([^\/]+)\.c|\1|")
     echo "Processing: $target"

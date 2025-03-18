@@ -9,7 +9,7 @@
 #include <dbg.h>
 
 #define MEM_SIZE 0x8000000
-#define MEM_BASE 0x80000000
+#define MEM_BASE 0x8000000
 #define REG_N 32
 
 typedef struct {

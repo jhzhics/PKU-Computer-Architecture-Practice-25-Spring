@@ -16,21 +16,16 @@ OBJCOPY = $(CROSS_COMPILE)objcopy
 READELF = $(CROSS_COMPILE)readelf
 
 ### Compilation flags
-CFLAGS   = -O2 -static -Wall -Werror -Wa,-march=rv64i -I./include \
-           -fno-asynchronous-unwind-tables -fno-builtin -fno-stack-protector \
-           -Wno-main -U_FORTIFY_SOURCE -fvisibility=hidden \
-		   -fdata-sections -ffunction-sections \
-		   -fno-pic -mcmodel=medany -mstrict-align \
-		   -DMAINARGS=\"$(mainargs)\"
-ASFLAGS  = -MMD $(INCFLAGS) -O0
-LDFLAGS  = -z noexecstack -T scripts/linker.ld --gc-sections -e _start -melf64lriscv
+CFLAGS   =  -O0 -nostartfiles -Wall -Werror -Wa,-march=rv64i -fno-asynchronous-unwind-tables\
+ -fno-builtin -fno-stack-protector -Wno-main -U_FORTIFY_SOURCE -fvisibility=hidden -fdata-sections\
+  -fno-pic -mstrict-align -static -T scripts/linker.ld -I./include -DMAINARGS=\"$(mainargs)\"
 
 ## 3. Rules
 all: $(TARGET)
 
 $(BUILD)/objs/start.o: trm/start.S
-	@echo + AS "->" $<
-	@$(AS) $(ASFLAGS) -c -o $@ $<
+	@echo + CC "->" $<
+	@$(CC) $(CFLAGS) -c -o $@ $<
 
 $(BUILD)/objs/trm.o: trm/trm.c
 	@echo + CC "->" $<
@@ -41,8 +36,8 @@ $(BUILD)/objs/%.o: src/%.c
 	@$(CC) -std=gnu11 $(CFLAGS) -c -o $@ $<
 
 $(BUILD)/%.elf: $(addprefix $(BUILD)/objs/, %.o trm.o start.o)
-	@echo + LD "->" $^
-	@$(LD) $(LDFLAGS) $^ -o $@
+	@echo + CC "->" $^
+	$(CC) $(CFLAGS) $^ -o $@
 
 $(BUILD)/%.bin: $(BUILD)/%.elf
 	@echo + OBJDUMP "->" $(patsubst %.elf, %.txt, $<)
