@@ -78,7 +78,7 @@ static struct Command parse(const char *command_buffer)
         int cnt = sscanf(command_buffer, "%*s %s", buf1);
         cmd.step_args.step_n = cnt != -1 ? atoi(buf1) : 1;
     }
-    else if (!strcmp(buf1, "i"))
+    else if (!strcmp(buf1, "info"))
     {
         cmd.type = Info;
         int cnt = sscanf(command_buffer, "%*s %s", buf1);
@@ -132,7 +132,7 @@ static void excute_help()
     "c: continue the stopped program\n"
     "q: exit the simulator\n"
     "si [N]: single step N times (default 1)\n"
-    "i r: print register status\n"
+    "info r: print register status\n"
     "b ADDR(Hex): set a breakpoint at ADDR\n"
     "d: delete all breakpoints"
     "x N ADDR(Hex): print 4N bytes at ADDR of the memory. ";

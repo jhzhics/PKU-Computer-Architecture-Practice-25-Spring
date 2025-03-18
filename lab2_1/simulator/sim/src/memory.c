@@ -44,7 +44,19 @@ uint64_t mem_read(uint64_t addr, int len){
     uint64_t ret = host_read(guest_to_host(addr), len);
     if (mem_trace.record_read && mem_trace.file)
     {
-        fprintf(mem_trace.file, "r 0x%016lx %d\n", addr, len);
+        fprintf(mem_trace.file, "r 0x%016lx %d ", addr, len);
+        switch(len){
+            case 1: fprintf(mem_trace.file, "%02x\n", (uint8_t)ret);
+            break;
+            case 2: fprintf(mem_trace.file, "%04x\n", (uint16_t)ret);
+            break;
+            case 4: fprintf(mem_trace.file, "%08x\n", (uint32_t)ret);
+            break;
+            case 8: fprintf(mem_trace.file, "%016lx\n", (uint64_t)ret);
+            break;
+            default: assert(0);
+            break;
+        }
     }
     return ret;
 error:
@@ -56,7 +68,19 @@ void mem_write(uint64_t addr, int len, uint64_t data){
     host_write(guest_to_host(addr), len, data);
     if (mem_trace.record_write && mem_trace.file)
     {
-        fprintf(mem_trace.file, "w 0x%016lx %d\n", addr, len);
+        fprintf(mem_trace.file, "w 0x%016lx %d ", addr, len);
+        switch(len){
+            case 1: fprintf(mem_trace.file, "%02x\n", (uint8_t)data);
+            break;
+            case 2: fprintf(mem_trace.file, "%04x\n", (uint16_t)data);
+            break;
+            case 4: fprintf(mem_trace.file, "%08x\n", (uint32_t)data);
+            break;
+            case 8: fprintf(mem_trace.file, "%016lx\n", (uint64_t)data);
+            break;
+            default: assert(0);
+            break;
+        }
     }
 error:
     return;
