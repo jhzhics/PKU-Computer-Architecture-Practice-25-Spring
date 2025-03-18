@@ -1,6 +1,6 @@
 #include <monitor.h>
 #include <common.h>
-#include <memory.h>
+#include <mem.h>
 #include <cpu.h>
 #include <state.h>
 #include <dbg.h>

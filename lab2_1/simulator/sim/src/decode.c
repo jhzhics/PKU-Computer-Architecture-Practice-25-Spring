@@ -2,7 +2,7 @@
 #include <macro.h>
 #include <pattern.h>
 #include <cpu.h>
-#include <memory.h>
+#include <mem.h>
 
 extern CPU_state cpu;
 

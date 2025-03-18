@@ -1,8 +1,21 @@
 #!/usr/bin/bash
 IFS=$'\n'
-
 DIR="test/src"
+packages=()
 
+# Check Prerequisites
+echo "Checking Denpendencies..."
+dpkg -l libcapstone-dev &> /dev/null
+for pkg in "${packages[@]}"; do
+    dpkg -l "$pkg" &> /dev/null
+    if [ $? -ne 0 ]; then
+        echo "Failed: Package '$pkg' is not installed. Please run install_dependencies.sh first."
+        exit 1
+    fi
+done
+
+
+# Running Tests
 targets=$(find "$DIR" -type f)
 targets_count=$(echo "$targets" | wc -l)
 success_count=0

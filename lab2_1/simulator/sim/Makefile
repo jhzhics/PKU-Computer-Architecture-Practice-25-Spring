@@ -25,7 +25,6 @@ $(BUILD)/objs/%.o: src/%.cpp
 $(SIMULATOR): $(OBJS)
 	@echo + LD "->" $^
 	@$(LD) -o $@ $^
-
 clean:
 	rm -rf $(BUILD)
 

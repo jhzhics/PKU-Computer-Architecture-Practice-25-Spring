@@ -1,6 +1,6 @@
 #include "upcall.h"
 #include "state.h"
-#include "memory.h"
+#include "mem.h"
 #include "dbg.h"
 
 #include <syscall.h>

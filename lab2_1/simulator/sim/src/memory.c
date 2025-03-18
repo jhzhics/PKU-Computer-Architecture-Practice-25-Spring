@@ -1,5 +1,9 @@
 #include <common.h>
+#include <mem.h>
 #include <state.h>
+#include <assert.h>
+
+struct __Mem_trace mem_trace;
 
 uint8_t* guest_to_host(uint64_t addr) {return mem + addr - MEM_BASE;}
 
@@ -23,6 +27,7 @@ static inline void host_write(void *addr, int len, uint64_t data){
         case 8: *(uint64_t *)addr = data; return;
         default: sentinel("Invalid len for write.");
     }
+    
 error:
     return;
 }
@@ -37,6 +42,10 @@ error:
 uint64_t mem_read(uint64_t addr, int len){
     check(addr - MEM_BASE < MEM_SIZE, "Read addr %016lx out of bound. PC %08lx", addr, cpu.pc);
     uint64_t ret = host_read(guest_to_host(addr), len);
+    if (mem_trace.record_read && mem_trace.file)
+    {
+        fprintf(mem_trace.file, "r 0x%016lx %d\n", addr, len);
+    }
     return ret;
 error:
     return 0;
@@ -45,8 +54,20 @@ error:
 void mem_write(uint64_t addr, int len, uint64_t data){
     check(addr - MEM_BASE < MEM_SIZE, "Write addr %016lx out of bound. PC %08lx", addr, cpu.pc);
     host_write(guest_to_host(addr), len, data);
+    if (mem_trace.record_write && mem_trace.file)
+    {
+        fprintf(mem_trace.file, "w 0x%016lx %d\n", addr, len);
+    }
 error:
     return;
+}
+
+void enable_mem_trace()
+{
+    mem_trace.file = fopen("memtrace.out", "w");
+    assert(mem_trace.file);
+    mem_trace.record_read = 1;
+    mem_trace.record_write = 1;
 }
 
 void load_image(char *filepath){

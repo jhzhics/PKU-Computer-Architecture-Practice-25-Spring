@@ -1,6 +1,6 @@
 #include <common.h>
 #include <decode.h>
-#include <memory.h>
+#include <mem.h>
 #include <state.h>
 
 void init_cpu(){
