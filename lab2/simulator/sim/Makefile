@@ -1,7 +1,9 @@
 ## 1. General Compilation Targets
 BUILD = build
 $(shell mkdir -p $(BUILD)/objs)
-OBJS = $(patsubst %.c, $(BUILD)/objs/%.o, $(notdir $(wildcard src/*.c)))
+C_SRC   = $(wildcard src/*.c)
+CPP_SRC = $(wildcard src/*.cpp)
+OBJS    = $(addprefix $(BUILD)/objs/, $(notdir $(C_SRC:.c=.o) $(CPP_SRC:.cpp=.o)))
 SIMULATOR = $(BUILD)/Simulator
 
 ## 2. General Compilation Flags
@@ -10,6 +12,7 @@ CXX = g++
 LD  = $(CC)
 CFLAGS   = -I./include -Wall -g
 CXXFLAGS = $(CFLAGS)
+LDFLAGS = -lstdc++
 
 ## 3. Rules
 all: $(SIMULATOR)
@@ -24,7 +27,7 @@ $(BUILD)/objs/%.o: src/%.cpp
 
 $(SIMULATOR): $(OBJS)
 	@echo + LD "->" $^
-	@$(LD) -o $@ $^
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 clean:
 	rm -rf $(BUILD)
 

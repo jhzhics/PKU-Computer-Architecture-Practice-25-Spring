@@ -2,6 +2,7 @@
 #include <decode.h>
 #include <mem.h>
 #include <state.h>
+#include <arch_perf.h>
 
 void init_cpu(){
     cpu.pc = MEM_BASE;
@@ -24,11 +25,24 @@ void cpu_exec(){
     }
 }
 
+static void good_trap_exit()
+{
+    if (get_perf_profiler_type() != 0) {
+        size_t dyn_insns = perf_get_instruction_count();
+        size_t dyn_cycles = perf_get_cycle_count();
+        printf("Dynamic instructions: %zu\n", dyn_insns);
+        printf("Dynamic cycles: %zu\n", dyn_cycles);
+        printf("CPI: %.2f\n", (float)dyn_cycles / dyn_insns);
+    }
+    printf(ANSI_FMT("HIT GOOD TRAP!\n", ANSI_FG_GREEN));
+}
+
+
 void halt_trap(uint64_t pc, uint64_t code){
     if(code){
         printf(ANSI_FMT("HIT BAD TRAP!\n", ANSI_FG_RED));
     }else{
-        printf(ANSI_FMT("HIT GOOD TRAP!\n", ANSI_FG_GREEN));
+        good_trap_exit();
     }
     log_info("Program ended at pc %08lx, with exit code %ld.", pc, code);
     running = 0;

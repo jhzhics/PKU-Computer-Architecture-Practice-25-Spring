@@ -4,11 +4,14 @@
 #include <monitor.h>
 #include <state.h>
 #include <string.h>
+#include <arch_perf.h>
 
 static const char * CLI_HELP = 
 "Usage: Simulator  --[batch|debug] [OPTIONS] image_path\n"
 "OPTIONS: \n"
-"--mem-trace: trace memory and write to memtrace.out";
+"--mem-trace: trace memory and write to memtrace.out\n"
+"--perf [multicycle|pipeline]: set performance profiler\n";
+
 
 static void exit_wrong_usage()
 {
@@ -17,17 +20,34 @@ static void exit_wrong_usage()
 }
 
 int main(int argc, char *argv[]){
-    if (argc != 3 && argc != 4)
+    if (argc != 3 && argc != 4 && argc != 5 && argc != 6)
     {
         exit_wrong_usage();
     }
 
     init_state(argv[argc - 1]);
-    if (!strcmp(argv[2], "--mem-trace"))
-    {
-        enable_mem_trace();
-    }
 
+
+    for (int i = 2; i < argc - 1; i++)
+    {
+        if (!strcmp(argv[i], "--mem-trace"))
+        {
+            enable_mem_trace();
+        }
+        else if (!strcmp(argv[i], "--perf"))
+        {
+            if (i + 1 < argc - 1)
+            {
+                set_perf_profiler(argv[i + 1]);
+                i++;
+            }
+            else
+            {
+                printf("Error: --perf option requires an argument.\n");
+                exit_wrong_usage();
+            }
+        }
+    }
 
     if (!strcmp(argv[1], "--batch"))
     {
