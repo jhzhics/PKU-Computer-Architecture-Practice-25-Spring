@@ -1,6 +1,7 @@
 SIM = sim/build/Simulator
 TARGET = test/build/$(T).bin
 MODE ?= batch
+PERF ?= OFF
 MEM_TRACE ?= OFF
 
 all:
@@ -13,7 +14,12 @@ ifeq ($(MEM_TRACE), ON)
 	@$(SIM) --$(MODE) --mem-trace $(TARGET)
 	@echo "make: use \"cat memtrace.out\" to check the memtrace."
 else
-	@$(SIM) --$(MODE) $(TARGET)
+	@if [ "$(PERF)" != "OFF" ]; then \
+		$(SIM) --$(MODE) --perf $(PERF) $(TARGET); \
+	else \
+		$(SIM) --$(MODE) $(TARGET); \
+	fi
+
 endif
 
 clean:
