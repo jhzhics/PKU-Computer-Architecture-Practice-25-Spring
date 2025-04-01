@@ -121,6 +121,7 @@ void MulticyclePerfProfiler::record_instruction(RV64DecodedIns ins_decoded)
         cycle_count += 1; // Default cycle count for unknown instructions
     }
     instruction_count++;
+    last_ins_decoded = ins_decoded;
 }
 
 
