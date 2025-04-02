@@ -294,72 +294,75 @@ Simulator building finished.
 Processing: lab2-2-1
 Success
 Performance Metrics:
-  Instructions: 74
-  Cycles: 305
+  Performance Profiler: Multicycle
+  Dynamic instructions: 74
+  Dynamic cycles: 305
   CPI: 4.12
-
 Processing: lab2-2-10
 Success
 Performance Metrics:
-  Instructions: 64
-  Cycles: 303
+  Performance Profiler: Multicycle
+  Dynamic instructions: 64
+  Dynamic cycles: 303
   CPI: 4.73
-
 Processing: lab2-2-2
 Success
 Performance Metrics:
-  Instructions: 74
-  Cycles: 305
+  Performance Profiler: Multicycle
+  Dynamic instructions: 74
+  Dynamic cycles: 305
   CPI: 4.12
-
 Processing: lab2-2-3
 Success
 Performance Metrics:
-  Instructions: 149
-  Cycles: 620
+  Performance Profiler: Multicycle
+  Dynamic instructions: 149
+  Dynamic cycles: 620
   CPI: 4.16
-
 Processing: lab2-2-4
 Success
 Performance Metrics:
-  Instructions: 209
-  Cycles: 875
+  Performance Profiler: Multicycle
+  Dynamic instructions: 209
+  Dynamic cycles: 875
   CPI: 4.19
-
 Processing: lab2-2-5
 Success
 Performance Metrics:
-  Instructions: 150
-  Cycles: 819
+  Performance Profiler: Multicycle
+  Dynamic instructions: 150
+  Dynamic cycles: 819
   CPI: 5.46
-
 Processing: lab2-2-6
 Success
 Performance Metrics:
-  Instructions: 110
-  Cycles: 649
+  Performance Profiler: Multicycle
+  Dynamic instructions: 110
+  Dynamic cycles: 649
   CPI: 5.90
-
 Processing: lab2-2-7
 Success
 Performance Metrics:
-  Instructions: 179
-  Cycles: 745
+  Performance Profiler: Multicycle
+  Dynamic instructions: 179
+  Dynamic cycles: 745
   CPI: 4.16
-
 Processing: lab2-2-8
 Success
 Performance Metrics:
-  Instructions: 106
-  Cycles: 434
+  Performance Profiler: Multicycle
+  Dynamic instructions: 106
+  Dynamic cycles: 434
   CPI: 4.09
-
 Processing: lab2-2-9
 Success
 Performance Metrics:
-  Instructions: 74
-  Cycles: 344
+  Performance Profiler: Multicycle
+  Dynamic instructions: 74
+  Dynamic cycles: 344
   CPI: 4.65
+
+Score: 10/10 (filtered: 'lab2')
 ```
 
 ## Part II：RISC-V 流水线模拟器（50分）
@@ -435,6 +438,7 @@ ALU进行64位乘法操作时造成的1个周期的stall.(因为是顺序处理�
 ### 请对该流水线处理器中因不同类型的冒险而发生的停顿进行统计，并打印数据和分析。 （共5个测试程序，每个2分）
 采用模拟流水线的方法.
 > 其它stall不统计(但是产生效果)
+> 总周期以最后一条指令出流水线为记
 
 运行测试程序的命令为：
 ```bash

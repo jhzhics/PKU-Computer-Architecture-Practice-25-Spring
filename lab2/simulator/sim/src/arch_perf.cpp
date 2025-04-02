@@ -106,18 +106,14 @@ void MulticyclePerfProfiler::record_instruction(RV64DecodedIns ins_decoded)
     if (it != multicycle_map.end())
     {
         cycle_count += it->second;
-        if (last_ins_decoded.ins == DIV && ins_decoded.ins == REM &&
+        if ((last_ins_decoded.ins == DIV && ins_decoded.ins == REM ||
+            last_ins_decoded.ins == DIVU && ins_decoded.ins == REMU ||
+            last_ins_decoded.ins == DIVW && ins_decoded.ins == REMW ||
+            last_ins_decoded.ins == DIVUW && ins_decoded.ins == REMUW) &&
+            last_ins_decoded.R.rs1 == ins_decoded.R.rs1 &&
+            last_ins_decoded.R.rs2 == ins_decoded.R.rs2 &&
             last_ins_decoded.R.rd != ins_decoded.R.rs1 &&
-            last_ins_decoded.R.rs1 != ins_decoded.R.rd ||
-            last_ins_decoded.ins == DIVU && ins_decoded.ins == REMU &&
-            last_ins_decoded.R.rd != ins_decoded.R.rs1 &&
-            last_ins_decoded.R.rs1 != ins_decoded.R.rd ||
-            last_ins_decoded.ins == DIVW && ins_decoded.ins == REMW &&
-            last_ins_decoded.R.rd != ins_decoded.R.rs1 &&
-            last_ins_decoded.R.rs1 != ins_decoded.R.rd ||
-            last_ins_decoded.ins == DIVUW && ins_decoded.ins == REMUW &&
-            last_ins_decoded.R.rd != ins_decoded.R.rs1 &&
-            last_ins_decoded.R.rs1 != ins_decoded.R.rd)
+            last_ins_decoded.R.rd != ins_decoded.R.rs2)
         {
             cycle_count -= 40; // Reduce the cycle count for the second instruction
         }
@@ -283,20 +279,35 @@ bool __PipelineStages::next_clock()
 {
     if (--EX_left <= 0)
     {
+        
         if (is_hazard())
         {
             begin_idx = (begin_idx + PHASE_N - 1) % PHASE_N;
             this->IF() = this->ID();
             this->ID() = {NOP, TYPE_N, {0}};
-            EX_left = pipeline_map[this->EX().ins];
+            
         }
         else
         {
             begin_idx = (begin_idx + PHASE_N - 1) % PHASE_N;
             this->IF() = {UNK, TYPE_N, {0}};
-            EX_left = pipeline_map[this->EX().ins];
         }
-    }
+        EX_left = pipeline_map[this->EX().ins];
+
+        // Special case for div/rem pairs - if MEM is div and EX is rem, set EX_left to 1
+        if ((this->MEM().ins == DIV && this->EX().ins == REM ||
+            this->MEM().ins == DIVU && this->EX().ins == REMU ||
+            this->MEM().ins == DIVW && this->EX().ins == REMW ||
+            this->MEM().ins == DIVUW && this->EX().ins == REMUW) &&
+            this->MEM().R.rs1 == this->EX().R.rs1 &&
+            this->MEM().R.rs2 == this->EX().R.rs2 &&
+            this->MEM().R.rd != this->EX().R.rs1 &&
+            this->MEM().R.rd != this->EX().R.rs2) {
+            
+            // DIV and REM can share execution cycles, so REM only needs 1 more cycle
+            EX_left = 1;
+        }
+        }
     return this->if_can_issue();
 }
 
