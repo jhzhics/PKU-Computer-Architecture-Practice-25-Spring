@@ -569,4 +569,121 @@ Score: 10/10 (filtered: 'lab2')
 
 ![datapath](assets/pipeline_pro.png)
 
+运行测试程序的命令为：
+```bash
+./driver.sh --perf pipeline_pro -E "lab2"
+```
+
+结果
+```bash
+Checking Dependencies...
+Build Simulator...
+Simulator building finished.
+Processing: lab2-2-1
+Success
+Performance Metrics:
+  Performance Profiler: Pipeline
+  Dynamic instructions: 74
+  Dynamic cycles: 87
+  CPI: 1.18
+  Control Hazard Stall Cycles: 0
+  Data Hazard Stall Cycles: 9
+
+Processing: lab2-2-10
+Success
+Performance Metrics:
+  Performance Profiler: Pipeline
+  Dynamic instructions: 64
+  Dynamic cycles: 114
+  CPI: 1.78
+  Control Hazard Stall Cycles: 0
+  Data Hazard Stall Cycles: 7
+
+Processing: lab2-2-2
+Success
+Performance Metrics:
+  Performance Profiler: Pipeline
+  Dynamic instructions: 74
+  Dynamic cycles: 87
+  CPI: 1.18
+  Control Hazard Stall Cycles: 0
+  Data Hazard Stall Cycles: 9
+
+Processing: lab2-2-3
+Success
+Performance Metrics:
+  Performance Profiler: Pipeline
+  Dynamic instructions: 149
+  Dynamic cycles: 184
+  CPI: 1.23
+  Control Hazard Stall Cycles: 2
+  Data Hazard Stall Cycles: 29
+
+Processing: lab2-2-4
+Success
+Performance Metrics:
+  Performance Profiler: Pipeline
+  Dynamic instructions: 209
+  Dynamic cycles: 254
+  CPI: 1.22
+  Control Hazard Stall Cycles: 2
+  Data Hazard Stall Cycles: 39
+
+Processing: lab2-2-5
+Success
+Performance Metrics:
+  Performance Profiler: Pipeline
+  Dynamic instructions: 150
+  Dynamic cycles: 380
+  CPI: 2.53
+  Control Hazard Stall Cycles: 2
+  Data Hazard Stall Cycles: 29
+
+Processing: lab2-2-6
+Success
+Performance Metrics:
+  Performance Profiler: Pipeline
+  Dynamic instructions: 110
+  Dynamic cycles: 330
+  CPI: 3.00
+  Control Hazard Stall Cycles: 2
+  Data Hazard Stall Cycles: 19
+
+Processing: lab2-2-7
+Success
+Performance Metrics:
+  Performance Profiler: Pipeline
+  Dynamic instructions: 179
+  Dynamic cycles: 219
+  CPI: 1.22
+  Control Hazard Stall Cycles: 2
+  Data Hazard Stall Cycles: 34
+
+Processing: lab2-2-8
+Success
+Performance Metrics:
+  Performance Profiler: Pipeline
+  Dynamic instructions: 106
+  Dynamic cycles: 122
+  CPI: 1.15
+  Control Hazard Stall Cycles: 0
+  Data Hazard Stall Cycles: 12
+
+Processing: lab2-2-9
+Success
+Performance Metrics:
+  Performance Profiler: Pipeline
+  Dynamic instructions: 74
+  Dynamic cycles: 125
+  CPI: 1.69
+  Control Hazard Stall Cycles: 0
+  Data Hazard Stall Cycles: 8
+
+
+Score: 10/10 (filtered: 'lab2')
+```
+
+分析:
+数据前递和分支预测的实现使得CPI大幅降低
+
 
