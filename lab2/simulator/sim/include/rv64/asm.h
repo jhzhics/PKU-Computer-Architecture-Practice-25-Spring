@@ -55,6 +55,7 @@ enum RV64Ins {
 };
 
 typedef struct {
+  uint64_t pc;
   enum RV64Ins ins;
   enum RV64Type type;
   union {
@@ -97,6 +98,8 @@ typedef struct {
     } N;
   };
 } RV64DecodedIns;
+
+int is_load_ins(RV64DecodedIns const *ins_decoded);
 
 /**
  * @returns 0 if the instruction has an immediate value

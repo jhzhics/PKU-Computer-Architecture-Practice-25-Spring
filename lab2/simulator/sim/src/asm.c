@@ -1,6 +1,12 @@
 #include "rv64/asm.h"
 
 
+int is_load_ins(RV64DecodedIns const * ins_decoded)
+{
+    return ins_decoded && (ins_decoded->ins == LB || ins_decoded->ins == LH || ins_decoded->ins == LW ||
+            ins_decoded->ins == LBU || ins_decoded->ins == LHU || ins_decoded->ins == LD);
+}
+
 int try_get_imm(RV64DecodedIns const *ins_decoded, int64_t *imm)
 {
     if (!ins_decoded)

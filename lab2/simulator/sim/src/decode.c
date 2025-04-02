@@ -70,6 +70,7 @@ void decode_exec(Decode *s){
     break; \
     case TYPE_N: break; \
   } \
+  ins_decoded.pc = cpu.pc; \
   perf_record_instruction(ins_decoded); \
   __VA_ARGS__ ; \
 }

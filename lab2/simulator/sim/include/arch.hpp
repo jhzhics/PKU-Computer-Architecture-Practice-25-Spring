@@ -43,7 +43,7 @@ static constexpr size_t BASE_PIPELINE_PHASE_N = 5;
 
 class __PipelineStages : public std::array<RV64DecodedIns, BASE_PIPELINE_PHASE_N>
 {
-private:
+protected:
     int begin_idx = 0;
     int EX_left = 1;
     static constexpr int PHASE_N = BASE_PIPELINE_PHASE_N;
@@ -60,7 +60,7 @@ private:
      * @brief Check if the pipeline is hazard
      * @warning Only should be called when the pipeline can clear IF.
      */
-    bool is_hazard();
+    virtual bool is_hazard();
 
 public:
 
@@ -93,10 +93,11 @@ public:
 class PipelinePerfProfiler : public BasePerfProfiler
 {
 public:
-    PipelinePerfProfiler();
+    PipelinePerfProfiler(bool pro);
     void record_instruction(RV64DecodedIns ins) override;
     size_t get_cycle_count() override;
     void print_misc_perf_info() const override;
+    ~PipelinePerfProfiler() override;
 protected:
     enum HazardType
     {
@@ -107,8 +108,28 @@ protected:
         HAZARD_TYPEN
     };
     std::array<size_t, HAZARD_TYPEN> hazards_cnt;
-    __PipelineStages pipeline_stages;
+    __PipelineStages * pipeline_stages;
     
+};
+
+class __PipelineStagesPro : public __PipelineStages
+{
+protected:
+    static constexpr size_t PREDICTOR_TABLE_SIZE = 4096;
+    static int get_pc_predictor_idx(uint64_t pc);
+    enum class PredictorState
+    {
+        NONE,
+        STRONG_TAKEN,
+        WEAK_TAKEN,
+        WEAK_NOT_TAKEN,
+        STRONG_NOT_TAKEN,
+    };
+    static int to_taken(PredictorState state);
+    static PredictorState state_transition(PredictorState state, bool taken);
+    std::array<PredictorState, PREDICTOR_TABLE_SIZE> predictor_table{};
+    bool is_hazard() override;
+
 };
 
 

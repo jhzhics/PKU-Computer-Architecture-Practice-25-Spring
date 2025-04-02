@@ -559,4 +559,14 @@ Score: 10/10 (filtered: 'lab2')
 结果主要由测试程序的性质决定，control stalls基本等于循环数*2, 但是测试程序普遍有较强数据依赖，所以data hazard的stall数目较多。
 
 ## Part III：其他加分
-如有任何加分项目，请在此说明，并给出运行结果。
+### 实现2bit 4096 entry 动态分支预测。
+数据通路部分需要加一个预测状态表，由control unit进行读写，control unit增添和状态表关联的对PcSrcE的控制逻辑
+
+> 预测状态表采取PC的13:2位作为索引，直接映射无组相联
+> 没有命中时默认是weak的向低处跳转
+> 同时增加数据的前递逻辑，消除ALU类指令的数据冒险，将load/use类指令的stall数目减少到1个周期,同时将jalr数据前递到IF，减少stall数目到1
+
+
+![datapath](assets/pipeline_pro.png)
+
+

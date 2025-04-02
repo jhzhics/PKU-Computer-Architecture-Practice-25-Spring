@@ -26,8 +26,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Validate performance mode
-if [[ -n "$perf_mode" && ! "$perf_mode" =~ ^(multicycle|pipeline)$ ]]; then
-    echo "Invalid perf mode: $perf_mode. Use multicycle or pipeline"
+if [[ -n "$perf_mode" && ! "$perf_mode" =~ ^(multicycle|pipeline|pipeline_pro)$ ]]; then
+    echo "Invalid perf mode: $perf_mode. Use multicycle or pipeline or pipeline_pro"
     exit 1
 fi
 
