@@ -54,12 +54,20 @@ void decode_exec(Decode *s){
   ins_decoded.type = macro_type; \
   ins_decoded.ins = name; \
   switch (macro_type) { \
-    case TYPE_I: ins_decoded.I.imm = imm; ins_decoded.I.rs1 = BITS(s->inst, 19, 15); ins_decoded.I.rd = rd; break; \
+    case TYPE_I: ins_decoded.I.imm = imm; ins_decoded.I.rs1 = BITS(s->inst, 19, 15); ins_decoded.I.rd = rd; \
+    ins_decoded.I.rs1_val = REG(ins_decoded.I.rs1);\
+    break; \
     case TYPE_U: ins_decoded.U.imm = imm; ins_decoded.U.rd = rd; break; \
     case TYPE_J: ins_decoded.J.imm = imm; ins_decoded.J.rd = rd; break; \
-    case TYPE_S: ins_decoded.S.imm = imm; ins_decoded.S.rs1 = BITS(s->inst, 19, 15); ins_decoded.S.rs2 = BITS(s->inst, 24, 20); break; \
-    case TYPE_SB: ins_decoded.SB.imm = imm; ins_decoded.SB.rs1 = BITS(s->inst, 19, 15); ins_decoded.SB.rs2 = BITS(s->inst, 24, 20); break; \
-    case TYPE_R: ins_decoded.R.rs1 = BITS(s->inst, 19, 15); ins_decoded.R.rs2 = BITS(s->inst, 24, 20); ins_decoded.R.rd = rd; break; \
+    case TYPE_S: ins_decoded.S.imm = imm; ins_decoded.S.rs1 = BITS(s->inst, 19, 15); ins_decoded.S.rs2 = BITS(s->inst, 24, 20); \
+    ins_decoded.S.rs1_val = REG(ins_decoded.S.rs1); ins_decoded.S.rs2_val = REG(ins_decoded.S.rs2); \
+    break; \
+    case TYPE_SB: ins_decoded.SB.imm = imm; ins_decoded.SB.rs1 = BITS(s->inst, 19, 15); ins_decoded.SB.rs2 = BITS(s->inst, 24, 20); \
+    ins_decoded.SB.rs1_val = REG(ins_decoded.SB.rs1); ins_decoded.SB.rs2_val = REG(ins_decoded.SB.rs2); \
+    break; \
+    case TYPE_R: ins_decoded.R.rs1 = BITS(s->inst, 19, 15); ins_decoded.R.rs2 = BITS(s->inst, 24, 20); ins_decoded.R.rd = rd; \
+    ins_decoded.R.rs1_val = REG(ins_decoded.R.rs1); ins_decoded.R.rs2_val = REG(ins_decoded.R.rs2); \
+    break; \
     case TYPE_N: break; \
   } \
   perf_record_instruction(ins_decoded); \

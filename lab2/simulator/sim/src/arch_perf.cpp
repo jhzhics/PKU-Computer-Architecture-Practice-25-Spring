@@ -2,13 +2,19 @@
 #include <unordered_map>
 #include <cstring>
 #include <cassert>
+#include <algorithm>
+#include <cstdio>
 
-#include "rv64/asm.h"
 extern "C" {
+    #include "rv64/asm.h"
     #include "arch_perf.h"
 }
 
+#include "arch.hpp"
+
 /**Static Data */
+
+// The cycle count for each instruction in multicycle mode
 static std::unordered_map<RV64Ins, int> multicycle_map = {
     // RV64I Load Instructions (5 cycles: F + D + MemAdr + MemRead + WB)
     {LB, 5}, {LH, 5}, {LW, 5}, {LD, 5}, {LBU, 5}, {LHU, 5}, {LWU, 5},
@@ -38,46 +44,46 @@ static std::unordered_map<RV64Ins, int> multicycle_map = {
     {DIV, 43}, {DIVU, 43}, {REM, 43}, {REMU, 43},
     {DIVW, 43}, {DIVUW, 43}, {REMW, 43}, {REMUW, 43},
     
-    // System Instructions (default to 4 cycles)
-    {ECALL, 4}, {EBREAK, 4}, {UNK, 4}
-};
-
-/**Class Declaration */
-enum class PerfProfilerType
-{
-    NONE,
-    MULTICYCLE,
-    PIPELINE,
-};
-
-
-class BasePerfProfiler
-{
-public:
-    virtual size_t get_cycle_count() const;
-    virtual size_t get_instruction_count() const;
-    virtual void record_instruction(RV64DecodedIns ins) = 0;
-    virtual ~BasePerfProfiler() = default;
-    BasePerfProfiler(PerfProfilerType type) : type(type) {}
-public:
-    const PerfProfilerType type;
-protected:
-    size_t cycle_count = 0;
-    size_t instruction_count = 0;
-};
-
-class MulticyclePerfProfiler : public BasePerfProfiler
-{
-public:
-    MulticyclePerfProfiler();
-    void record_instruction(RV64DecodedIns ins) override;
+    // System Instructions
+    {ECALL, 4}, {EBREAK, 4}, 
     
-protected:
-    RV64DecodedIns last_ins_decoded;
+    {NOP, 1},
+    {UNK, INT64_MIN}
 };
+
+
+// The excution cycle count for each instruction in pipeline mode
+static std::unordered_map<RV64Ins, int> pipeline_map = {
+    // 64-bit multiplication needs 2 cycles
+    {MUL, 2}, {MULH, 2}, {MULHSU, 2}, {MULHU, 2},
+    
+    // div/rem needs 40 cycles
+    {DIV, 40}, {DIVU, 40}, {REM, 40}, {REMU, 40},
+    {DIVW, 40}, {DIVUW, 40}, {REMW, 40}, {REMUW, 40},
+    
+    // other instructions need 1 cycles
+    {LB, 1}, {LH, 1}, {LW, 1}, {LD, 1}, {LBU, 1}, {LHU, 1}, {LWU, 1},
+    {SB, 1}, {SH, 1}, {SW, 1}, {SD, 1},
+    {ADDI, 1}, {SLTI, 1}, {SLTIU, 1}, {ANDI, 1}, {ORI, 1}, {XORI, 1},
+    {ADDIW, 1}, {SLLI, 1}, {SRLI, 1}, {SRAI, 1}, {SLLIW, 1}, {SRLIW, 1}, {SRAIW, 1},
+    {ADD, 1}, {SUB, 1}, {SLT, 1}, {SLTU, 1}, {AND, 1}, {OR, 1}, {XOR, 1},
+    {SLL, 1}, {SRL, 1}, {SRA, 1}, {ADDW, 1}, {SUBW, 1}, {SLLW, 1}, {SRLW, 1}, {SRAW, 1},
+    {BEQ, 1}, {BNE, 1}, {BLT, 1}, {BGE, 1}, {BLTU, 1}, {BGEU, 1},
+    {JAL, 1}, {JALR, 1},
+    {LUI, 1}, {AUIPC, 1},
+    
+    {MULW, 1},
+    
+    {ECALL, 1}, {EBREAK, 1}, 
+    
+    {NOP, 1},
+    // This instruction acts as 
+    {UNK, 0}
+};
+
 
 /**Class definition */
-size_t BasePerfProfiler::get_cycle_count() const
+size_t BasePerfProfiler::get_cycle_count()
 {
     return cycle_count;
 }
@@ -124,6 +130,200 @@ void MulticyclePerfProfiler::record_instruction(RV64DecodedIns ins_decoded)
     last_ins_decoded = ins_decoded;
 }
 
+PipelinePerfProfiler::PipelinePerfProfiler() : BasePerfProfiler(PerfProfilerType::PIPELINE){
+    cycle_count = 0;
+    instruction_count = 0;
+    std::fill_n(hazards_cnt.begin(), HAZARD_TYPEN, 0);
+    std::fill_n(pipeline_stages.begin(), BASE_PIPELINE_PHASE_N, RV64DecodedIns{UNK, TYPE_N, {0}});
+}
+
+void PipelinePerfProfiler::record_instruction(RV64DecodedIns ins_decoded)
+{
+    while (!pipeline_stages.if_can_issue())
+    {
+        cycle_count++;
+        pipeline_stages.next_clock();
+    }
+    pipeline_stages.issue(ins_decoded);
+    instruction_count++;
+}
+
+size_t PipelinePerfProfiler::get_cycle_count()
+{
+    cycle_count += pipeline_stages.flush();
+    return cycle_count;
+}
+
+void PipelinePerfProfiler::print_misc_perf_info() const
+{
+    printf("Control Hazard Stall Cycles: %zu\n", pipeline_stages.get_control_hazard_stall());
+    printf("Data Hazard Stall Cycles: %zu\n", pipeline_stages.get_data_hazard_stall());
+}
+
+RV64DecodedIns &__PipelineStages::IF()
+{
+    return std::array<RV64DecodedIns, PHASE_N>::operator[](begin_idx);
+}
+
+RV64DecodedIns &__PipelineStages::ID()
+{
+    return std::array<RV64DecodedIns, PHASE_N>::operator[](
+        (begin_idx + 1) % PHASE_N);
+}
+
+RV64DecodedIns &__PipelineStages::EX()
+{
+    return std::array<RV64DecodedIns, PHASE_N>::operator[](
+        (begin_idx + 2) % PHASE_N);
+}
+
+RV64DecodedIns &__PipelineStages::MEM()
+{
+    return std::array<RV64DecodedIns, PHASE_N>::operator[](
+        (begin_idx + 3) % PHASE_N);
+}
+
+RV64DecodedIns &__PipelineStages::WB()
+{
+    return std::array<RV64DecodedIns, PHASE_N>::operator[](
+        (begin_idx + 4) % PHASE_N);
+}
+
+bool __PipelineStages::is_hazard()
+{
+    assert(EX_left <= 0);
+    /* Data Hazard */
+    int rs1 = 0, rs2 = 0, rd = 0;
+    try_get_rs1(&this->IF(), &rs1);
+    try_get_rs2(&this->IF(), &rs2);
+    // ID
+    if (try_get_rd(&this->ID(), &rd) == 0 && rd)
+    {
+        if (rd == rs1 || rd == rs2)
+        {
+            data_hazard_stall++;
+            return true;
+        }
+    }
+    // EX
+    rd = 0;
+    if (try_get_rd(&this->EX(), &rd) == 0 && rd)
+    {
+        if (rd == rs1 || rd == rs2)
+        {
+            data_hazard_stall++;
+            return true;
+        }
+    }
+    // jalr hazard
+    if (this->ID().ins == JALR || this->ID().ins == JAL)
+    {
+        data_hazard_stall++;
+        return true;
+    }
+
+    /* Contro Hazard */
+    int takenQ = -1;
+    // ID
+    if (is_branch_taken(&this->ID(), &takenQ) == 0 && takenQ)
+    {
+        control_hazard_stall++;
+        return true;
+    }
+    // EX
+    if (is_branch_taken(&this->EX(), &takenQ) == 0 && takenQ)
+    {
+        control_hazard_stall++;
+        return true;
+    }
+
+    return false;
+}
+
+RV64DecodedIns &__PipelineStages::operator[](size_t i)
+{
+    return std::array<RV64DecodedIns, PHASE_N>::operator[](
+    (i + begin_idx) % PHASE_N);
+}
+const RV64DecodedIns & __PipelineStages::operator[](size_t i) const
+{
+    return std::array<RV64DecodedIns, PHASE_N>::operator[](
+        (i + begin_idx) % PHASE_N);
+}
+RV64DecodedIns const &__PipelineStages::IF() const
+{
+    return std::array<RV64DecodedIns, PHASE_N>::operator[](begin_idx);
+}
+RV64DecodedIns const& __PipelineStages::ID() const
+{
+    return std::array<RV64DecodedIns, PHASE_N>::operator[](
+        (begin_idx + 1) % PHASE_N);
+}
+RV64DecodedIns const& __PipelineStages::EX() const
+{
+    return std::array<RV64DecodedIns, PHASE_N>::operator[](
+        (begin_idx + 2) % PHASE_N);
+}
+RV64DecodedIns const& __PipelineStages::MEM() const
+{
+    return std::array<RV64DecodedIns, PHASE_N>::operator[](
+        (begin_idx + 3) % PHASE_N);
+}
+RV64DecodedIns const& __PipelineStages::WB() const
+{
+    return std::array<RV64DecodedIns, PHASE_N>::operator[](
+        (begin_idx + 4) % PHASE_N);
+}
+
+/**
+ * @brief Move the pipeline to the next clock cycle
+ * @returns true if the pipeline has cleared the IF stage(i.e. can issue a new instruction)
+ */
+bool __PipelineStages::next_clock()
+{
+    if (--EX_left <= 0)
+    {
+        if (is_hazard())
+        {
+            begin_idx = (begin_idx + PHASE_N - 1) % PHASE_N;
+            this->IF() = this->ID();
+            this->ID() = {NOP, TYPE_N, {0}};
+            EX_left = pipeline_map[this->EX().ins];
+        }
+        else
+        {
+            begin_idx = (begin_idx + PHASE_N - 1) % PHASE_N;
+            this->IF() = {UNK, TYPE_N, {0}};
+            EX_left = pipeline_map[this->EX().ins];
+        }
+    }
+    return this->if_can_issue();
+}
+
+int __PipelineStages::flush()
+{
+    int cycles = 0;
+    while(
+        this->IF().ins != UNK || this->ID().ins != UNK ||
+        this->EX().ins != UNK || this->MEM().ins != UNK ||
+        this->WB().ins != UNK)
+    {
+        cycles++;
+        this->next_clock();
+    }
+    return cycles;
+}
+
+void __PipelineStages::issue(const RV64DecodedIns &ins)
+{
+    assert(this->if_can_issue());
+    this->IF() = ins;
+}
+
+bool __PipelineStages::if_can_issue() const
+{
+    return this->IF().ins == UNK;
+}
 
 /**External API */
 static BasePerfProfiler *perf_profiler = nullptr;
@@ -156,7 +356,8 @@ int set_perf_profiler(const char *arch)
         {
             delete perf_profiler;
         }
-        assert(false && "Pipeline performance profiler is not implemented yet.");
+        perf_profiler = new PipelinePerfProfiler();
+        return static_cast<int>(PerfProfilerType::PIPELINE);
     }
     else
     {
@@ -191,6 +392,13 @@ int get_perf_profiler_type()
     else
     {
         return static_cast<int>(PerfProfilerType::NONE);
+    }
+}
+void print_misc_perf_info()
+{
+    if (perf_profiler)
+    {
+        perf_profiler->print_misc_perf_info();
     }
 }
 }

@@ -48,6 +48,8 @@ enum RV64Ins {
     // RV64M 32-bit Multiply/Divide Instructions
     MULW, DIVW, DIVUW, REMW, REMUW,
 
+    // For Pipeline bubbles
+    NOP,
     // Special
     UNK
 };
@@ -57,36 +59,69 @@ typedef struct {
   enum RV64Type type;
   union {
     struct {
-      uint64_t imm;
-      uint64_t rs1;
-      uint64_t rd;
+      int64_t imm;
+      int rs1;
+      uint64_t rs1_val;
+      int rd;
     } I;
     struct {
-      uint64_t imm;
-      uint64_t rd;
+      int64_t imm;
+      int rd;
     } U;
     struct {
-      uint64_t imm;
-      uint64_t rs1;
-      uint64_t rs2;
+      int64_t imm;
+      int rs1;
+      int rs2;
+      uint64_t rs1_val;
+      uint64_t rs2_val;
     } S;
     struct {
-      uint64_t rd;
-      uint64_t rs1;
-      uint64_t rs2;
+      int rd;
+      int rs1;
+      int rs2;
+      uint64_t rs1_val;
+      uint64_t rs2_val;
     } R;
     struct {
-      uint64_t imm;
-      uint64_t rs1;
-      uint64_t rs2;
+      int64_t imm;
+      int rs1;
+      int rs2;
+      uint64_t rs1_val;
+      uint64_t rs2_val;
     } SB;
     struct {
-      uint64_t imm;
-      uint64_t rd;
+      int64_t imm;
+      int rd;
     } J;
     struct {
     } N;
   };
 } RV64DecodedIns;
+
+/**
+ * @returns 0 if the instruction has an immediate value
+ */
+int try_get_imm(RV64DecodedIns const *ins_decoded, int64_t *imm);
+
+/**
+ * @returns 0 if the instruction has a second source register
+ */
+int try_get_rs1(RV64DecodedIns const *ins_decoded, int *rs1);
+
+/**
+ * @returns 0 if the instruction has a destination register
+ */
+int try_get_rs2(RV64DecodedIns const *ins_decoded, int *rs2);
+
+/**
+ * @returns 0 if the instruction has a destination register
+ */
+int try_get_rd(RV64DecodedIns const *ins_decoded, int *rd);
+
+/**
+ * @param branch_taken set to 1 if the instruction if the branch is taken 0 if not
+ * @returns 0 if the instruction is a branch instruction
+ */
+int is_branch_taken(RV64DecodedIns const *ins_decoded, int *branch_taken);
 
 #endif

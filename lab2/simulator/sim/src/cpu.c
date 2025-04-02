@@ -30,11 +30,13 @@ static void good_trap_exit()
     if (get_perf_profiler_type() != 0) {
         size_t dyn_insns = perf_get_instruction_count();
         size_t dyn_cycles = perf_get_cycle_count();
+        printf(ANSI_FMT("HIT GOOD TRAP!\n", ANSI_FG_GREEN));
+        printf("Performance Profiler: %s\n", get_perf_profiler_type() == 1 ? "Multicycle" : "Pipeline");
         printf("Dynamic instructions: %zu\n", dyn_insns);
         printf("Dynamic cycles: %zu\n", dyn_cycles);
         printf("CPI: %.2f\n", (float)dyn_cycles / dyn_insns);
+        print_misc_perf_info();
     }
-    printf(ANSI_FMT("HIT GOOD TRAP!\n", ANSI_FG_GREEN));
 }
 
 

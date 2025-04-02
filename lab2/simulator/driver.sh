@@ -79,10 +79,14 @@ for line in $targets; do
         if [[ -n "$perf_mode" ]]; then
             echo -e "\033[1;34mPerformance Metrics:\033[0m"
             echo "$output" | awk '
-                /Dynamic instructions:/ {printf "  Instructions: %s\n", $3}
-                /Dynamic cycles:/ {printf "  Cycles: %s\n", $3}
-                /CPI:/ {printf "  CPI: %s\n\n", $2}'
+                /Performance Profiler:/ {printf "  %s\n", $0}
+                /Dynamic instructions:/ {printf "  %s\n", $0}
+                /Dynamic cycles:/ {printf "  %s\n", $0}
+                /CPI:/ {printf "  %s\n", $0}
+                /Control Hazard Stall Cycles:/ {printf "  %s\n", $0}
+                /Data Hazard Stall Cycles:/ {printf "  %s\n\n", $0}'
         fi
+
     else
         echo -e "\033[1;31mFailed\033[0m"
         echo "$output"
