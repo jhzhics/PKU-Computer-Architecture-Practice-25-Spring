@@ -218,7 +218,7 @@ bool __PipelineStages::is_hazard()
         return true;
     }
 
-    /* Contro Hazard */
+    /* Control Hazard */
     int takenQ = -1;
     // ID
     if (is_branch_taken(&this->ID(), &takenQ) == 0 && takenQ)
