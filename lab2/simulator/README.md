@@ -381,12 +381,12 @@ ALU选择输入执行运算
 5. WB
 写寄存器文件
 
-[pipeline_stages](assets/pipline_stages.png)
+![pipeline_stages](assets/pipline_stages.png)
 
 
 ### 给出流水线处理器的数据通路图和控制信号产生逻辑。不限形式，手绘也可。 （5分）
 > 为确保正确性，数据通路图和控制信号产生逻辑均使用了[DDCA Ch7](https://www.youtube.com/watch?v=lrN-uBKooRY&list=PLhA3DoZr6boVQy9Pz-aPZLH-rA6DvUidB)的设计
-[pipeline](assets/pipline.png)
+![pipeline](assets/pipline.png)
 控制信号产生具体的布尔逻辑由op，func3,func7共同决定。
 
 ### 请简要描述该流水线中会产生的各种冒险，每类均需举例说明。 （10分）
@@ -685,5 +685,3 @@ Score: 10/10 (filtered: 'lab2')
 
 分析:
 数据前递和分支预测的实现使得CPI大幅降低
-
-
