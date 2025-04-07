@@ -37,6 +37,10 @@ static void good_trap_exit()
         printf("CPI: %.2f\n", (float)dyn_cycles / dyn_insns);
         print_misc_perf_info();
     }
+    else
+    {
+        printf(ANSI_FMT("HIT GOOD TRAP!\n", ANSI_FG_GREEN));
+    }
 }
 
 
