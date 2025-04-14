@@ -1,7 +1,0 @@
-target/
-rust
-c
-main
-results.txt
-generator
-.vscode/
