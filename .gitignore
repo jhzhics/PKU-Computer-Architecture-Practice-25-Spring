@@ -2,3 +2,5 @@
 .vscode/
 .devcontainer/
 memtrace.out
+*.txt
+!requirements.txt
