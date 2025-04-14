@@ -3,6 +3,7 @@
 #include <mem.h>
 #include <state.h>
 #include <arch_perf.h>
+#include "cache.h"
 
 void init_cpu(){
     cpu.pc = MEM_BASE;
@@ -36,6 +37,12 @@ static void good_trap_exit()
         printf("Dynamic cycles: %zu\n", dyn_cycles);
         printf("CPI: %.2f\n", (float)dyn_cycles / dyn_insns);
         print_misc_perf_info();
+        if (is_cache_enabled())
+        {
+            printf("L1 miss rate: %.2f%%\n", get_L1_miss_rate() * 100);
+            printf("L2 miss rate: %.2f%%\n", get_L2_miss_rate() * 100);
+            printf("LLC miss rate: %.2f%%\n", get_LLC_miss_rate() * 100);
+        }
     }
     else
     {

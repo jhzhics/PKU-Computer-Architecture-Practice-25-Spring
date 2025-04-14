@@ -2,6 +2,9 @@
 #include <bitset>
 #include <cassert>
 #include <algorithm>
+#include "cache.h"
+
+static CacheInterface *backend_cache = nullptr;
 
 static bool is_valid_cache_config(const CacheConfig &config)
 {
@@ -32,7 +35,6 @@ static size_t get_first_bit_pos(size_t x)
 }
 
 Cache::Cache(const CacheConfig &config, std::unique_ptr<CacheInterface> next_cache) : CacheInterface(config)
-, m_next_cache(std::move(next_cache))
 {
     assert(is_valid_cache_config(config) && "Invalid cache configuration");
     m_set_n = config.cache_size / config.block_size / config.associativity;
@@ -40,6 +42,7 @@ Cache::Cache(const CacheConfig &config, std::unique_ptr<CacheInterface> next_cac
     m_block_shift = get_first_bit_pos(config.block_size);
     m_cache_table.resize(m_set_n,
     std::list<CacheEntry>(config.associativity));
+    m_next_cache = std::move(next_cache);
 }
 
 size_t Cache::write(size_t addr, size_t len)
@@ -187,6 +190,7 @@ size_t Cache::evict(size_t set_index, CacheEntry &entry)
 {
     assert(config.evict_policy == EvictPolicy::LRU && "Other eviction policies are not implemented");
     auto &list = m_cache_table[set_index];
+    m_replacement_count++;
     if (!list.back().valid || !list.back().dirty)
     {
         list.pop_back();
@@ -212,4 +216,80 @@ std::list<CacheEntry>::iterator Cache::look_up(std::list<CacheEntry> &list, size
         }
     }
     return list.end();
+}
+
+
+
+void init_cache(int cache_sim) 
+{
+    if (backend_cache)
+    {
+        delete backend_cache;
+        backend_cache = nullptr;
+    }
+
+    if (cache_sim)
+    {
+        CacheConfig Dram_config{0, 0, 0, EvictPolicy::LRU, WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate, 200, 20};
+        CacheConfig LLC_config{1 << 23, 64, 8, EvictPolicy::LRU, WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate, 20, 20};
+        CacheConfig L2_config{1 << 18, 64, 8, EvictPolicy::LRU, WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate, 8, 6};
+        CacheConfig L1_config{1 << 15, 64, 8, EvictPolicy::LRU, WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate, 4, 4};
+        std::unique_ptr<CacheInterface> dram = std::make_unique<Memory>(Dram_config);
+        std::unique_ptr<CacheInterface> llc = std::make_unique<Cache>(LLC_config, std::move(dram));
+        std::unique_ptr<CacheInterface> l2 = std::make_unique<Cache>(L2_config, std::move(llc));
+        backend_cache = new Cache(L1_config, std::move(l2));
+    }
+    else
+    {
+        backend_cache = new Memory({0, 0, 0, EvictPolicy::LRU, WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate, 1, 0});
+    }
+}
+
+size_t write_cache(size_t addr, size_t len)
+{
+    assert(backend_cache != nullptr && "Cache is not initialized");
+    return backend_cache->write(addr, len);
+}
+
+size_t read_cache(size_t addr, size_t len)
+{
+    assert(backend_cache != nullptr && "Cache is not initialized");
+    return backend_cache->read(addr, len);
+}
+
+int is_cache_enabled()
+{
+    return dynamic_cast<Cache *>(backend_cache) != nullptr;
+}
+
+double get_L1_miss_rate()
+{
+    Cache *mem = dynamic_cast<Cache *>(backend_cache);
+    assert(mem != nullptr && "Cache is not initialized");
+    return mem->get_miss_rate();
+}
+
+double get_L2_miss_rate()
+{
+    Cache *mem = dynamic_cast<Cache *>(backend_cache);
+    assert(mem != nullptr && "Cache is not initialized");
+    mem = dynamic_cast<Cache *>(mem->get_next_cache());
+    assert(mem != nullptr && "Cache is not initialized");
+    return mem->get_miss_rate();
+}
+
+double get_LLC_miss_rate()
+{
+    Cache *mem = dynamic_cast<Cache *>(backend_cache);
+    assert(mem != nullptr && "Cache is not initialized");
+    mem = dynamic_cast<Cache *>(mem->get_next_cache());
+    assert(mem != nullptr && "Cache is not initialized");
+    mem = dynamic_cast<Cache *>(mem->get_next_cache());
+    assert(mem != nullptr && "Cache is not initialized");
+    return mem->get_miss_rate();
+}
+
+CacheInterface *CacheInterface::get_next_cache() const
+{
+    return m_next_cache.get();
 }

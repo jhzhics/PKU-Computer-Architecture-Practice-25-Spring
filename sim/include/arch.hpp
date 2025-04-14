@@ -46,6 +46,7 @@ class __PipelineStages : public std::array<RV64DecodedIns, BASE_PIPELINE_PHASE_N
 protected:
     int begin_idx = 0;
     int EX_left = 1;
+    int MEM_left = 1;
     static constexpr int PHASE_N = BASE_PIPELINE_PHASE_N;
     int control_hazard_stall = 0;
     int data_hazard_stall = 0;

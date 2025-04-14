@@ -5,12 +5,15 @@
 #include <state.h>
 #include <string.h>
 #include <arch_perf.h>
+#include <cache.h>
+
 
 static const char * CLI_HELP = 
 "Usage: Simulator  --[batch|debug] [OPTIONS] image_path\n"
 "OPTIONS: \n"
 "--mem-trace: trace memory and write to memtrace.out\n"
-"--perf [multicycle|pipeline]: set performance profiler\n";
+"--perf [multicycle|pipeline|pipeline_pro]: set performance profiler\n"
+"--cache: use cache backend\n";
 
 
 static void exit_wrong_usage()
@@ -20,7 +23,8 @@ static void exit_wrong_usage()
 }
 
 int main(int argc, char *argv[]){
-    if (argc != 3 && argc != 4 && argc != 5 && argc != 6)
+    int cache_backend = 0;
+    if (argc != 3 && argc != 4 && argc != 5 && argc != 6 && argc != 7)
     {
         exit_wrong_usage();
     }
@@ -47,7 +51,12 @@ int main(int argc, char *argv[]){
                 exit_wrong_usage();
             }
         }
+        else if (!strcmp(argv[i], "--cache"))
+        {
+            cache_backend = 1;
+        }
     }
+    init_cache(cache_backend);
 
     if (!strcmp(argv[1], "--batch"))
     {
@@ -62,6 +71,6 @@ int main(int argc, char *argv[]){
         exit_wrong_usage();
     }
 
-
+    
     return 0;
 }

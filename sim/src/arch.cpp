@@ -7,9 +7,11 @@
 
 extern "C" {
     #include "rv64/asm.h"
+    #include "cache.h"
 }
 
 #include "arch.hpp"
+
 
 
 /**Static Data */
@@ -82,6 +84,45 @@ static std::unordered_map<RV64Ins, int> pipeline_map = {
 };
 
 
+/**Helper Functions */
+static size_t get_memory_access_cycles(RV64DecodedIns ins_decoded)
+{
+
+    switch (ins_decoded.ins)
+    {
+        case LB:
+        case LBU:
+            return read_cache(ins_decoded.I.rs1_val + ins_decoded.I.imm, 1);
+            break;
+        case LH:
+        case LHU:
+            return read_cache(ins_decoded.I.rs1_val + ins_decoded.I.imm, 2);
+            break;
+        case LW:
+        case LWU:
+            return read_cache(ins_decoded.I.rs1_val + ins_decoded.I.imm, 4);
+            break;
+        case LD:
+            return read_cache(ins_decoded.I.rs1_val + ins_decoded.I.imm, 8);
+            break;
+        case SB:
+            return write_cache(ins_decoded.S.rs1_val + ins_decoded.S.imm, 1);
+            break;
+        case SH:
+            return write_cache(ins_decoded.S.rs1_val + ins_decoded.S.imm, 2);
+            break;
+        case SW:
+            return write_cache(ins_decoded.S.rs1_val + ins_decoded.S.imm, 4);
+            break;
+        case SD:
+            return write_cache(ins_decoded.S.rs1_val + ins_decoded.S.imm, 8);
+            break;
+        default:
+            return 1; // Default cycle count for memory stage
+            break;
+    }
+}
+
 /**Class definition */
 size_t BasePerfProfiler::get_cycle_count()
 {
@@ -103,6 +144,7 @@ MulticyclePerfProfiler::MulticyclePerfProfiler() : BasePerfProfiler(PerfProfiler
 void MulticyclePerfProfiler::record_instruction(RV64DecodedIns ins_decoded)
 {
     auto it = multicycle_map.find(ins_decoded.ins);
+
     if (it != multicycle_map.end())
     {
         cycle_count += it->second;
@@ -122,6 +164,10 @@ void MulticyclePerfProfiler::record_instruction(RV64DecodedIns ins_decoded)
     {
         cycle_count += 1; // Default cycle count for unknown instructions
     }
+
+    // access memory
+    cycle_count += get_memory_access_cycles(ins_decoded) - 1;
+
     instruction_count++;
     last_ins_decoded = ins_decoded;
 }
@@ -200,7 +246,7 @@ RV64DecodedIns &__PipelineStages::WB()
 
 bool __PipelineStages::is_hazard()
 {
-    assert(EX_left <= 0);
+    assert(EX_left <= 0 && MEM_left <= 0);
     /* Data Hazard */
     int rs1 = 0, rs2 = 0, rd = 0;
     try_get_rs1(&this->IF(), &rs1);
@@ -301,7 +347,7 @@ __PipelineStagesPro::PredictorState __PipelineStagesPro::state_transition(Predic
 
 bool __PipelineStagesPro::is_hazard()
 {
-    assert(EX_left <= 0);
+    assert(EX_left <= 0 && MEM_left <= 0);
     /* Data Hazard */
     int rs1 = 0, rs2 = 0, rd = 0;
     try_get_rs1(&this->IF(), &rs1);
@@ -407,9 +453,9 @@ RV64DecodedIns const& __PipelineStages::WB() const
  */
 bool __PipelineStages::next_clock()
 {
-    if (--EX_left <= 0)
+    EX_left--; MEM_left--;
+    if (EX_left <= 0 && MEM_left <= 0)
     {
-        
         if (is_hazard())
         {
             begin_idx = (begin_idx + PHASE_N - 1) % PHASE_N;
@@ -423,6 +469,7 @@ bool __PipelineStages::next_clock()
             this->IF() = {0, UNK, TYPE_N, {0}};
         }
         EX_left = pipeline_map[this->EX().ins];
+        MEM_left = get_memory_access_cycles(this->MEM());
 
         // Special case for div/rem pairs - if MEM is div and EX is rem, set EX_left to 1
         if ((this->MEM().ins == DIV && this->EX().ins == REM ||

@@ -11,7 +11,7 @@ CACHE_SIMULATOR = $(BUILD)/CacheSimulator
 CC  = gcc
 CXX = g++
 LD  = $(CC)
-CFLAGS  = -I./include -Wall -O2
+CFLAGS  = -I./include -Wall -O0 -g
 CXXFLAGS = $(CFLAGS)
 LDFLAGS = -lstdc++
 

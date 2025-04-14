@@ -43,6 +43,12 @@ public:
     size_t get_read_count() const { return m_read_count; }
     size_t get_write_miss_count() const { return m_write_miss_count; }
     size_t get_read_miss_count() const { return m_read_miss_count; }
+    double get_miss_rate() const
+    {
+        return static_cast<double>(m_write_miss_count + m_read_miss_count)
+         / static_cast<double>(m_write_count + m_read_count);
+    }
+    CacheInterface *get_next_cache() const;
 
 protected:
     // The number of times the cache is accessed. It is the count for line cache.
@@ -50,6 +56,8 @@ protected:
     size_t m_read_count = 0;
     size_t m_write_miss_count = 0;
     size_t m_read_miss_count = 0;
+    size_t m_replacement_count = 0;
+    std::unique_ptr<CacheInterface> m_next_cache = nullptr;
 };
 
 // Memory always hit, the time is hit_latency.
@@ -77,7 +85,6 @@ protected:
     size_t m_tag_shift;
     size_t m_block_shift;
     size_t m_set_n;
-    std::unique_ptr<CacheInterface> m_next_cache = nullptr;
     
     size_t get_set_index(size_t addr) const;
     size_t get_tag(size_t addr) const;

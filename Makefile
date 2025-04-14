@@ -3,6 +3,7 @@ TARGET = test/build/$(T).bin
 MODE ?= batch
 PERF ?= OFF
 MEM_TRACE ?= OFF
+CACHE ?= OFF
 
 all:
 	@echo "-------Build Simulator-------"
@@ -14,8 +15,12 @@ ifeq ($(MEM_TRACE), ON)
 	@$(SIM) --$(MODE) --mem-trace $(TARGET)
 	@echo "make: use \"cat memtrace.out\" to check the memtrace."
 else
-	@if [ "$(PERF)" != "OFF" ]; then \
+	@if [ "$(PERF)" != "OFF" ] && [ "$(CACHE)" != "OFF" ]; then \
+		$(SIM) --$(MODE) --perf $(PERF) --cache $(TARGET); \
+	elif [ "$(PERF)" != "OFF" ]; then \
 		$(SIM) --$(MODE) --perf $(PERF) $(TARGET); \
+	elif [ "$(CACHE)" != "OFF" ]; then \
+		$(SIM) --$(MODE) --cache $(TARGET); \
 	else \
 		$(SIM) --$(MODE) $(TARGET); \
 	fi

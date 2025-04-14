@@ -2,25 +2,25 @@
 #define __CACHE_H__
 #include "stddef.h"
 
-enum EvictPolicy
+typedef enum
 {
     LRU
-};
+} EvictPolicy;
 
 /**
  * @brief Cache write policy. Plus,we always use write allocate.
  */
-enum WritePolicy
+typedef enum
 {
     WriteThrough,
     WriteBack
-};
+} WritePolicy;
 
-enum WriteMissPolicy
+typedef enum
 {
     WriteAllocate,
     NoWriteAllocate
-};
+} WriteMissPolicy;
 
 typedef struct
 {
@@ -34,4 +34,11 @@ typedef struct
     size_t bus_latency; // in cycles
 } CacheConfig;
 
+void init_cache(int cache_sim);
+size_t write_cache(size_t addr, size_t len);
+size_t read_cache(size_t addr, size_t len);
+int is_cache_enabled();
+double get_L1_miss_rate();
+double get_L2_miss_rate();
+double get_LLC_miss_rate();
 #endif
