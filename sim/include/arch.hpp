@@ -98,7 +98,7 @@ public:
     void record_instruction(RV64DecodedIns ins) override;
     size_t get_cycle_count() override;
     void print_misc_perf_info() const override;
-    ~PipelinePerfProfiler() override;
+    virtual ~PipelinePerfProfiler() override;
 protected:
     enum HazardType
     {
