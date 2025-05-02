@@ -19,7 +19,7 @@ int main(int argc, char *argv[])
     }
 
 
-    CacheConfig Dram_config{0, 0, 0, EvictPolicy::LRU, WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate, 200, 20};
+    CacheConfig Dram_config{0, 0, 0, EvictPolicy::LRU, WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate, 100, 20};
     CacheConfig L2_config{262144, 64, 8, EvictPolicy::LRU, WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate, 3, 6};
     CacheConfig L1_config{32768, 64, 8, EvictPolicy::LRU, WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate, 2, 0};
     std::unique_ptr<CacheInterface> dram = std::make_unique<Memory>(Dram_config);
