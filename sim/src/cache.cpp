@@ -95,6 +95,18 @@ size_t Cache::form_addr(size_t tag, size_t set_index) const
     return tag << m_tag_shift | set_index << m_block_shift;
 }
 
+CacheNonBlocking::CacheNonBlocking(const CacheConfig &config, size_t mshr_n, std::unique_ptr<CacheInterface> next_cache)
+: Cache(config, std::move(next_cache)), m_mshr_n(mshr_n)
+{
+    m_mshr_table.resize(m_mshr_n);
+}
+
+VictimCache::VictimCache(const CacheConfig &config, size_t victim_size, std::unique_ptr<CacheInterface> next_cache)
+: Cache(config, std::move(next_cache)), m_victim_size(victim_size)
+{
+    m_victim_table.resize(m_victim_size);
+}
+
 size_t Cache::single_read(size_t set_index, size_t tag, size_t len)
 {
     assert(len <= config.block_size);
@@ -485,15 +497,10 @@ size_t CacheSridePrefetch::read(size_t addr, size_t len)
     {
         // Miss Prefetch
         long stride = addr - last_addr;
-        prefetch = false;
-        bool old_counted = this->is_counted();
-        this->set_counted(false);
         for (size_t i = 1; i <= m_prefetch_size; ++i)
         {
-            this->read(addr + stride * i, 1);
+            this->prefetch(addr + stride * i, config.block_size);
         }
-        this->set_counted(old_counted);
-        prefetch = true;
     }
     last_addr = addr;
     return latency;
@@ -508,16 +515,634 @@ size_t CacheSridePrefetch::write(size_t addr, size_t len)
     {
         // Miss Prefetch
         long stride = addr - last_addr;
-        prefetch = false;
-        bool old_counted = this->is_counted();
-        this->set_counted(false);
         for (size_t i = 1; i <= m_prefetch_size; ++i)
         {
-            this->read(addr + stride * i, 1);
+            this->prefetch(addr + stride * i, 1);
         }
-        this->set_counted(old_counted);
-        prefetch = true;
     }
     last_addr = addr;
+    return latency;
+}
+
+size_t CacheNonBlocking::single_read(size_t set_index, size_t tag, size_t len)
+{
+    assert(len <= config.block_size);
+    increment_read_count();
+    auto &list = m_cache_table[set_index];
+    auto it = look_up(list, tag);
+    assert(config.evict_policy == EvictPolicy::LRU && "Other eviction policies are not implemented");
+    if (it != list.end())
+    {
+        // Hit 
+        CacheEntry entry = *it;
+        list.erase(it);
+        list.push_front(entry);
+        return config.hit_latency;
+    }
+    else
+    {
+        // Miss
+        increment_read_miss_count();
+        size_t extra_latency = m_next_cache->config.bus_latency + m_next_cache->read(form_addr(tag, set_index), config.block_size);
+        CacheEntry entry{tag, false, true};
+        extra_latency += evict(set_index, entry);
+        if (int cycle = conflict_cycle(form_addr(tag, set_index)); cycle > 0)
+        {
+            extra_latency = cycle;
+        }
+        else if (MSHR *mshr = find_available_mshr(); mshr) {
+            mshr->valid = true;
+            mshr->addr = form_addr(tag, set_index);
+            mshr->left_clock = config.hit_latency + extra_latency;
+            extra_latency = 0;
+            m_hit_under_miss++;       
+        }
+        return config.hit_latency + extra_latency;
+    }
+}
+
+size_t CacheNonBlocking::single_write(size_t set_index, size_t tag, size_t len)
+{
+    assert(len <= config.block_size);
+    increment_write_count();
+    auto &list = m_cache_table[set_index];
+    auto it = look_up(list, tag);
+    assert(config.evict_policy == EvictPolicy::LRU && "Other eviction policies are not implemented");
+    assert(m_next_cache != nullptr);
+    if (it != list.end())
+    {
+        // Hit
+        CacheEntry entry = *it;
+        size_t extra_latency = 0;
+        switch (config.write_policy)
+        {
+        case WritePolicy::WriteThrough:
+            entry.dirty = false;
+            extra_latency = m_next_cache->config.bus_latency + m_next_cache->write(form_addr(tag, set_index), len);
+            break;
+        case WritePolicy::WriteBack:
+            entry.dirty = true;
+            break;
+        default:
+            assert(false && "Invalid write policy");
+            break;
+        };
+        list.erase(it);
+        list.push_front(entry);
+        return config.hit_latency + extra_latency;
+    }
+    else
+    {
+        increment_write_miss_count();
+        // Miss, write allocate
+        size_t extra_latency = config.write_policy == WritePolicy::WriteThrough && config.write_miss_policy == WriteMissPolicy::NoWriteAllocate
+                                   ? 0: m_next_cache->config.bus_latency + m_next_cache->read(form_addr(tag, set_index), config.block_size);
+        CacheEntry entry{tag, false, true};
+        switch (config.write_policy)
+        {
+        case WritePolicy::WriteThrough:
+            entry.dirty = false;
+            extra_latency += m_next_cache->config.bus_latency + m_next_cache->write(form_addr(tag, set_index), len);
+            break;
+        case WritePolicy::WriteBack:
+            entry.dirty = true;
+            break;
+        default:
+            assert(false && "Invalid write policy");
+            break;
+        };
+        switch (config.write_miss_policy)
+        {
+        case WriteMissPolicy::WriteAllocate:
+            extra_latency += evict(set_index, entry);
+            break;
+        case WriteMissPolicy::NoWriteAllocate:
+            break;
+        default:
+            assert(false && "Invalid write miss policy");
+            break;
+        }
+        if (int cycle = conflict_cycle(form_addr(tag, set_index)); cycle > 0)
+        {
+            extra_latency = cycle;
+        }
+        else if (MSHR *mshr = find_available_mshr(); mshr) {
+            mshr->valid = true;
+            mshr->addr = form_addr(tag, set_index);
+            mshr->left_clock = config.hit_latency + extra_latency;
+            extra_latency = 0;
+            m_hit_under_miss++;       
+        }
+        return config.hit_latency + extra_latency;
+    }
+}
+
+void CacheNonBlocking::next_clock(size_t cycles)
+{
+    for(auto &mshr : m_mshr_table)
+    {
+        if (mshr.valid)
+        {
+            mshr.left_clock -= (int)cycles;
+            if (mshr.left_clock <= 0)
+            {
+                mshr.valid = false;
+                mshr.left_clock = 0;
+            }
+        }
+    }
+    Cache::next_clock(cycles);
+}
+
+CacheNonBlocking::MSHR *CacheNonBlocking::find_available_mshr()
+{
+    for (auto &mshr : m_mshr_table)
+    {
+        if (!mshr.valid)
+        {
+            return &mshr;
+        }
+    }
+    return nullptr;
+}
+
+int CacheNonBlocking::conflict_cycle(size_t addr)
+{
+    for (auto &mshr : m_mshr_table)
+    {
+        if (mshr.valid && mshr.addr == addr)
+        {
+            return mshr.left_clock;
+        }
+    }
+    return 0;
+}
+
+
+size_t VictimCache::single_read(size_t set_index, size_t tag, size_t len)
+{
+    assert(len <= config.block_size);
+    increment_read_count();
+    auto &list = m_cache_table[set_index];
+    auto it = look_up(list, tag, form_addr(tag, set_index));
+    assert(config.evict_policy == EvictPolicy::LRU && "Other eviction policies are not implemented");
+    if (it != list.end())
+    {
+        // Hit 
+        CacheEntry entry = *it;
+        list.erase(it);
+        list.push_front(entry);
+        return config.hit_latency;
+    }
+    else
+    {
+        // Miss
+        increment_read_miss_count();
+        size_t extra_latency = m_next_cache->config.bus_latency + m_next_cache->read(form_addr(tag, set_index), config.block_size);
+        CacheEntry entry{tag, false, true};
+        extra_latency += evict(set_index, entry);
+        return config.hit_latency + extra_latency;
+    }
+}
+size_t VictimCache::single_write(size_t set_index, size_t tag, size_t len)
+{
+    assert(len <= config.block_size);
+    increment_write_count();
+    auto &list = m_cache_table[set_index];
+    auto it = look_up(list, tag, form_addr(tag, set_index));
+    assert(config.evict_policy == EvictPolicy::LRU && "Other eviction policies are not implemented");
+    assert(m_next_cache != nullptr);
+    if (it != list.end())
+    {
+        // Hit
+        CacheEntry entry = *it;
+        size_t extra_latency = 0;
+        switch (config.write_policy)
+        {
+        case WritePolicy::WriteThrough:
+            entry.dirty = false;
+            extra_latency = m_next_cache->config.bus_latency + m_next_cache->write(form_addr(tag, set_index), len);
+            break;
+        case WritePolicy::WriteBack:
+            entry.dirty = true;
+            break;
+        default:
+            assert(false && "Invalid write policy");
+            break;
+        };
+        list.erase(it);
+        list.push_front(entry);
+        return config.hit_latency + extra_latency;
+    }
+    else
+    {
+        increment_write_miss_count();
+        // Miss, write allocate
+        size_t extra_latency = config.write_policy == WritePolicy::WriteThrough && config.write_miss_policy == WriteMissPolicy::NoWriteAllocate
+                                   ? 0: m_next_cache->config.bus_latency + m_next_cache->read(form_addr(tag, set_index), config.block_size);
+        CacheEntry entry{tag, false, true};
+        switch (config.write_policy)
+        {
+        case WritePolicy::WriteThrough:
+            entry.dirty = false;
+            extra_latency += m_next_cache->config.bus_latency + m_next_cache->write(form_addr(tag, set_index), len);
+            break;
+        case WritePolicy::WriteBack:
+            entry.dirty = true;
+            break;
+        default:
+            assert(false && "Invalid write policy");
+            break;
+        };
+        switch (config.write_miss_policy)
+        {
+        case WriteMissPolicy::WriteAllocate:
+            extra_latency += evict(set_index, entry);
+            break;
+        case WriteMissPolicy::NoWriteAllocate:
+            break;
+        default:
+            assert(false && "Invalid write miss policy");
+            break;
+        }
+        return config.hit_latency + extra_latency;
+    }
+}
+size_t VictimCache::evict(size_t set_index, CacheEntry &entry)
+{
+    assert(config.evict_policy == EvictPolicy::LRU && "Other eviction policies are not implemented");
+    auto &list = m_cache_table[set_index];
+    increment_replacement_count();
+    CacheEntry back = list.back();
+    list.pop_back();
+    list.push_front(entry);
+    m_victim_table.push_front
+    (VictimCacheEntry{form_addr(entry.tag, set_index), entry.dirty, true});
+    auto evicted = m_victim_table.back();
+    m_victim_table.pop_back();
+    if (evicted.valid && evicted.dirty)
+    {
+        size_t next_latency = m_next_cache->write(evicted.addr, config.block_size);
+        return next_latency + m_next_cache->config.bus_latency;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
+std::list<CacheEntry>::iterator VictimCache::look_up(std::list<CacheEntry> &list, size_t tag, size_t addr)
+{
+    if (auto it = Cache::look_up(list, tag); it != list.end())
+    {
+        return it;
+    }
+    for (auto it = m_victim_table.begin(); it != m_victim_table.end(); ++it)
+    {
+        if (it->addr == addr && it->valid)
+        {
+            m_victim_hit_count++;
+            CacheEntry entry{get_tag(addr), it->dirty, true};
+            list.push_front(entry);
+            m_victim_table.erase(it);
+            auto back = list.back();
+            list.pop_back();
+            m_victim_table.push_front(VictimCacheEntry{form_addr(back.tag, get_set_index(addr)), back.dirty, true});
+            return list.begin();
+        }
+    }
+    return list.end();
+}
+
+void CacheSridePrefetch::print_extra_info() const
+{
+    std::cout << "Prefetch count: " << total_prefetch_count << std::endl;
+    std::cout << "Prefetch cover count: " << prefetch_cover_count << std::endl;
+    std::cout << "Prefetch hit count: " << prefetch_hit_count << std::endl;
+    std::cout << "Coverage Rate: " << (double)prefetch_cover_count / (get_read_count() + get_write_count()) << std::endl;
+    std::cout << "Prefetch Accuracy: " << (double)prefetch_hit_count / total_prefetch_count << std::endl;
+}
+
+size_t CacheSridePrefetch::single_read(size_t set_index, size_t tag, size_t len)
+{
+    assert(len <= config.block_size);
+    increment_read_count();
+    auto &list = m_cache_table[set_index];
+    auto it = look_up(list, tag);
+    size_t latency = 0;
+    bool miss = false;
+    assert(config.evict_policy == EvictPolicy::LRU && "Other eviction policies are not implemented");
+    if (it != list.end())
+    {
+        // Hit 
+        CacheEntry entry = *it;
+        switch (entry.prefetch)
+        {
+            case PrefetchStatus::NotPrefetch:
+            break;
+            case PrefetchStatus::Prefetch:
+                prefetch_cover_count++;
+                prefetch_hit_count++;
+                entry.prefetch = PrefetchStatus::HitPrefetch;
+            break;
+            case PrefetchStatus::HitPrefetch:
+                prefetch_cover_count++;
+        }
+        list.erase(it);
+        list.push_front(entry);
+        latency = config.hit_latency;
+    }
+    else
+    {
+        // Miss
+        miss = true;
+        increment_read_miss_count();
+        size_t extra_latency = m_next_cache->config.bus_latency + m_next_cache->read(form_addr(tag, set_index), config.block_size);
+        CacheEntry entry{tag, false, true};
+        extra_latency += evict(set_index, entry);
+        latency = config.hit_latency + extra_latency;
+    }
+    return latency;
+}
+
+size_t CacheSridePrefetch::single_write(size_t set_index, size_t tag, size_t len)
+{
+        assert(len <= config.block_size);
+    increment_write_count();
+    auto &list = m_cache_table[set_index];
+    auto it = look_up(list, tag);
+    size_t latency = 0;
+    bool miss = false;
+    assert(config.evict_policy == EvictPolicy::LRU && "Other eviction policies are not implemented");
+    assert(m_next_cache != nullptr);
+    if (it != list.end())
+    {
+        // Hit
+        CacheEntry entry = *it;
+        switch (entry.prefetch)
+        {
+            case PrefetchStatus::NotPrefetch:
+            break;
+            case PrefetchStatus::Prefetch:
+                prefetch_cover_count++;
+                prefetch_hit_count++;
+                entry.prefetch = PrefetchStatus::HitPrefetch;
+            break;
+            case PrefetchStatus::HitPrefetch:
+                prefetch_cover_count++;
+        }
+        size_t extra_latency = 0;
+        switch (config.write_policy)
+        {
+        case WritePolicy::WriteThrough:
+            entry.dirty = false;
+            extra_latency = m_next_cache->config.bus_latency + m_next_cache->write(form_addr(tag, set_index), len);
+            break;
+        case WritePolicy::WriteBack:
+            entry.dirty = true;
+            break;
+        default:
+            assert(false && "Invalid write policy");
+            break;
+        };
+        list.erase(it);
+        list.push_front(entry);
+        latency = config.hit_latency + extra_latency;
+    }
+    else
+    {
+        increment_write_miss_count();
+        miss = true;
+        // Miss, write allocate
+        size_t extra_latency = config.write_policy == WritePolicy::WriteThrough && config.write_miss_policy == WriteMissPolicy::NoWriteAllocate
+                                   ? 0: m_next_cache->config.bus_latency + m_next_cache->read(form_addr(tag, set_index), config.block_size);
+        CacheEntry entry{tag, false, true};
+        switch (config.write_policy)
+        {
+        case WritePolicy::WriteThrough:
+            entry.dirty = false;
+            extra_latency += m_next_cache->config.bus_latency + m_next_cache->write(form_addr(tag, set_index), len);
+            break;
+        case WritePolicy::WriteBack:
+            entry.dirty = true;
+            break;
+        default:
+            assert(false && "Invalid write policy");
+            break;
+        };
+        switch (config.write_miss_policy)
+        {
+        case WriteMissPolicy::WriteAllocate:
+            extra_latency += evict(set_index, entry);
+            break;
+        case WriteMissPolicy::NoWriteAllocate:
+            break;
+        default:
+            assert(false && "Invalid write miss policy");
+            break;
+        }
+        latency = config.hit_latency + extra_latency;
+    }
+    return latency;
+}
+
+void CacheSridePrefetch::prefetch(size_t addr, size_t len) {
+    len += addr % config.block_size;
+    addr = addr - addr % config.block_size;
+    while (len > 0)
+    {
+        size_t set_index = get_set_index(addr);
+        size_t tag = get_tag(addr);
+        size_t single_len = std::min(len, config.block_size);
+        single_prefetch(set_index, tag, single_len);
+        len -= single_len;
+        addr += single_len;
+    }
+    assert(get_read_count() >= get_read_miss_count());
+    return;
+}
+
+void CacheSridePrefetch::single_prefetch(size_t set_index, size_t tag, size_t len)
+{
+    assert(len <= config.block_size);
+    auto &list = m_cache_table[set_index];
+    auto it = look_up(list, tag);
+    assert(config.evict_policy == EvictPolicy::LRU && "Other eviction policies are not implemented");
+    if (it != list.end())
+    {
+        // Hit 
+        return;
+    }
+    else
+    {
+        // Miss
+        total_prefetch_count++;
+        size_t extra_latency = m_next_cache->config.bus_latency + m_next_cache->read(form_addr(tag, set_index), config.block_size);
+        CacheEntry entry{tag, false, true, PrefetchStatus::Prefetch};
+        extra_latency += evict(set_index, entry);
+        return;
+    }
+}
+
+CacheFinal::CacheFinal(const CacheConfig &config, size_t mshr_n, size_t prefetch_size, std::unique_ptr<CacheInterface> next_cache)
+: Cache(config, std::move(next_cache)), CacheNextPretch(config, prefetch_size, nullptr)
+, CacheNonBlocking(config, mshr_n, nullptr) {}
+
+size_t CacheFinal::single_read(size_t set_index, size_t tag, size_t len)
+{
+    assert(len <= config.block_size);
+    increment_read_count();
+    auto &list = m_cache_table[set_index];
+    auto it = look_up(list, tag);
+    size_t latency = 0;
+    bool miss = false;
+    assert(config.evict_policy == EvictPolicy::LRU && "Other eviction policies are not implemented");
+    if (it != list.end())
+    {
+        // Hit 
+        CacheEntry entry = *it;
+        switch (entry.prefetch)
+        {
+            case PrefetchStatus::NotPrefetch:
+            break;
+            case PrefetchStatus::Prefetch:
+                prefetch_cover_count++;
+                prefetch_hit_count++;
+                entry.prefetch = PrefetchStatus::HitPrefetch;
+            break;
+            case PrefetchStatus::HitPrefetch:
+                prefetch_cover_count++;
+        }
+        list.erase(it);
+        list.push_front(entry);
+        latency = config.hit_latency;
+    }
+    else
+    {
+        // Miss
+        miss = true;
+        increment_read_miss_count();
+        size_t extra_latency = m_next_cache->config.bus_latency + m_next_cache->read(form_addr(tag, set_index), config.block_size);
+        CacheEntry entry{tag, false, true};
+        extra_latency += evict(set_index, entry);
+        if (int cycle = conflict_cycle(form_addr(tag, set_index)); cycle > 0)
+        {
+            extra_latency = cycle;
+        }
+        else if (MSHR *mshr = find_available_mshr(); mshr) {
+            mshr->valid = true;
+            mshr->addr = form_addr(tag, set_index);
+            mshr->left_clock = config.hit_latency + extra_latency;
+            extra_latency = 0;
+            m_hit_under_miss++;       
+        }
+        latency = config.hit_latency + extra_latency;
+    }
+
+    if (miss)
+    {
+        // Miss Prefetch
+        this->prefetch(form_addr(tag, set_index) + config.block_size, config.block_size * m_prefetch_size);
+    }
+    return latency;
+}
+
+size_t CacheFinal::single_write(size_t set_index, size_t tag, size_t len)
+{
+    assert(len <= config.block_size);
+    increment_write_count();
+    auto &list = m_cache_table[set_index];
+    auto it = look_up(list, tag);
+    size_t latency = 0;
+    bool miss = false;
+    assert(config.evict_policy == EvictPolicy::LRU && "Other eviction policies are not implemented");
+    assert(m_next_cache != nullptr);
+    if (it != list.end())
+    {
+        // Hit
+        CacheEntry entry = *it;
+        switch (entry.prefetch)
+        {
+            case PrefetchStatus::NotPrefetch:
+            break;
+            case PrefetchStatus::Prefetch:
+                prefetch_cover_count++;
+                prefetch_hit_count++;
+                entry.prefetch = PrefetchStatus::HitPrefetch;
+            break;
+            case PrefetchStatus::HitPrefetch:
+                prefetch_cover_count++;
+        }
+        size_t extra_latency = 0;
+        switch (config.write_policy)
+        {
+        case WritePolicy::WriteThrough:
+            entry.dirty = false;
+            extra_latency = m_next_cache->config.bus_latency + m_next_cache->write(form_addr(tag, set_index), len);
+            break;
+        case WritePolicy::WriteBack:
+            entry.dirty = true;
+            break;
+        default:
+            assert(false && "Invalid write policy");
+            break;
+        };
+        list.erase(it);
+        list.push_front(entry);
+        latency = config.hit_latency + extra_latency;
+    }
+    else
+    {
+        increment_write_miss_count();
+        miss = true;
+        // Miss, write allocate
+        size_t extra_latency = config.write_policy == WritePolicy::WriteThrough && config.write_miss_policy == WriteMissPolicy::NoWriteAllocate
+                                   ? 0: m_next_cache->config.bus_latency + m_next_cache->read(form_addr(tag, set_index), config.block_size);
+        CacheEntry entry{tag, false, true};
+        switch (config.write_policy)
+        {
+        case WritePolicy::WriteThrough:
+            entry.dirty = false;
+            extra_latency += m_next_cache->config.bus_latency + m_next_cache->write(form_addr(tag, set_index), len);
+            break;
+        case WritePolicy::WriteBack:
+            entry.dirty = true;
+            break;
+        default:
+            assert(false && "Invalid write policy");
+            break;
+        };
+        switch (config.write_miss_policy)
+        {
+        case WriteMissPolicy::WriteAllocate:
+            extra_latency += evict(set_index, entry);
+            break;
+        case WriteMissPolicy::NoWriteAllocate:
+            break;
+        default:
+            assert(false && "Invalid write miss policy");
+            break;
+        }
+
+        if (int cycle = conflict_cycle(form_addr(tag, set_index)); cycle > 0)
+        {
+            extra_latency = cycle;
+        }
+        else if (MSHR *mshr = find_available_mshr(); mshr) {
+            mshr->valid = true;
+            mshr->addr = form_addr(tag, set_index);
+            mshr->left_clock = config.hit_latency + extra_latency;
+            extra_latency = 0;
+            m_hit_under_miss++;       
+        }
+
+        latency = config.hit_latency + extra_latency;
+    }
+
+    if (miss)
+    {
+        // Miss Prefetch
+        this->prefetch(form_addr(tag, set_index) + config.block_size, config.block_size * m_prefetch_size);
+    }
     return latency;
 }

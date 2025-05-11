@@ -60,7 +60,7 @@ public:
          / static_cast<double>(m_write_count + m_read_count);
     }
     CacheInterface *get_next_cache() const;
-
+    virtual void next_clock(size_t cycles = 1) { if (m_next_cache) m_next_cache->next_clock(); }
 protected:
     std::unique_ptr<CacheInterface> m_next_cache = nullptr;
     void increment_write_count() { if (m_is_counted) m_write_count++; }
@@ -86,8 +86,12 @@ class Memory : public CacheInterface
 {
 public:
     Memory(const CacheConfig &config) : CacheInterface(config) {}
-    size_t write(size_t addr, size_t len) override { increment_write_count(); return config.hit_latency; }
-    size_t read(size_t addr, size_t len) override { increment_read_count(); return config.hit_latency;}
+    size_t write(size_t addr, size_t len) override { 
+        increment_write_count(); return config.hit_latency; 
+    }
+    size_t read(size_t addr, size_t len) override {
+        increment_read_count(); return config.hit_latency;
+    }
 };
 
 class Cache : public CacheInterface
@@ -117,12 +121,12 @@ protected:
     /**
      * @returns The number of cycles to evict the entry.
      */
-    size_t evict(size_t set_index, CacheEntry &entry);
+    virtual size_t evict(size_t set_index, CacheEntry &entry);
 
     static std::list<CacheEntry>::iterator look_up(std::list<CacheEntry> &list, size_t tag);
 };
 
-class CacheNextPretch : public Cache
+class CacheNextPretch : virtual public Cache
 {
 public:
     CacheNextPretch(const CacheConfig &config, size_t prefetch_size,
@@ -134,10 +138,9 @@ protected:
     size_t prefetch_cover_count = 0;
     size_t prefetch_hit_count = 0; 
     size_t single_read(size_t set_index, size_t tag, size_t len) override;
-    void single_prefetch(size_t set_index, size_t tag, size_t len);
-    void prefetch(size_t addr, size_t len);
     size_t single_write(size_t set_index, size_t tag, size_t len) override;
-    
+    void single_prefetch(size_t set_index, size_t tag, size_t len);
+    void prefetch(size_t addr, size_t len); 
 };
 
 class CacheSridePrefetch : public Cache
@@ -146,10 +149,99 @@ public:
     CacheSridePrefetch(const CacheConfig &config, size_t prefetch_size, 
     std::unique_ptr<CacheInterface> next_cache = nullptr
     ) : Cache(config, std::move(next_cache)), m_prefetch_size(prefetch_size) {}
+    void print_extra_info() const override;
 protected:
     size_t m_prefetch_size;
+    size_t total_prefetch_count = 0;
+    size_t prefetch_cover_count = 0;
+    size_t prefetch_hit_count = 0; 
     size_t read(size_t addr, size_t len) override;
     size_t write(size_t addr, size_t len) override;
+    size_t single_read(size_t set_index, size_t tag, size_t len) override;
+    size_t single_write(size_t set_index, size_t tag, size_t len) override;
+    void prefetch(size_t addr, size_t len);
+    void single_prefetch(size_t set_index, size_t tag, size_t len);
+};
+
+class CacheNonBlocking : virtual public Cache
+{
+public:
+    CacheNonBlocking(const CacheConfig &config, 
+    size_t mshr_n, std::unique_ptr<CacheInterface> next_cache = nullptr);
+
+struct MSHR
+{
+    size_t addr;
+    bool valid = false;
+    int left_clock;
+};
+
+protected:
+    size_t m_mshr_n;
+    std::vector<MSHR> m_mshr_table;
+    size_t m_hit_under_miss = 0;
+    size_t single_read(size_t set_index, size_t tag, size_t len) override;
+    size_t single_write(size_t set_index, size_t tag, size_t len) override;
+    void next_clock(size_t cycles = 1) override;
+    MSHR *find_available_mshr();
+    int conflict_cycle(size_t addr);
+    void print_extra_info() const override
+    {
+        Cache::print_extra_info();
+        std::printf("Hit Under Miss: %zu\n", m_hit_under_miss);
+        std::printf("MSHR Coverage Rate: %.2f\n", static_cast<double>(m_hit_under_miss) / (
+            get_read_miss_count() + get_write_miss_count())
+        );
+    }
+};
+
+
+class VictimCache : public Cache
+{
+public:
+    VictimCache(const CacheConfig &config,
+    size_t victim_size, std::unique_ptr<CacheInterface> next_cache = nullptr);
+    struct VictimCacheEntry
+    {
+        size_t addr;
+        bool dirty = false;
+        bool valid = false;
+    };
+    void print_extra_info() const override
+    {
+        Cache::print_extra_info();
+        std::printf("Victim Cache Hit Count: %zu\n", m_victim_hit_count);
+        if (m_next_cache)
+        {
+            std::printf("Victim Cache Hit vs Next Cache Access: %.2f\n",
+                static_cast<double>(m_victim_hit_count) / (m_next_cache->get_read_count() + m_next_cache->get_write_count())
+            );
+        }
+    }
+
+protected:
+    size_t m_victim_size;
+    size_t m_victim_hit_count = 0;
+    std::list<VictimCacheEntry> m_victim_table;
+    size_t single_read(size_t set_index, size_t tag, size_t len) override;
+    size_t single_write(size_t set_index, size_t tag, size_t len) override;
+    size_t evict(size_t set_index, CacheEntry &entry) override;
+    std::list<CacheEntry>::iterator look_up(std::list<CacheEntry> &list, size_t tag, size_t addr);
+};
+
+class CacheFinal : public CacheNextPretch, public CacheNonBlocking
+{
+public:
+    CacheFinal(const CacheConfig &config, size_t mshr_n, size_t prefetch_size,
+    std::unique_ptr<CacheInterface> next_cache = nullptr);
+    void print_extra_info() const override
+    {
+        CacheNextPretch::print_extra_info();
+        CacheNonBlocking::print_extra_info();
+    }
+protected:
+    size_t single_read(size_t set_index, size_t tag, size_t len) override;
+    size_t single_write(size_t set_index, size_t tag, size_t len) override;
 };
 
 #endif
