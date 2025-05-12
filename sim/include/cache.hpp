@@ -173,6 +173,7 @@ struct MSHR
 {
     size_t addr;
     bool valid = false;
+    bool dirty = false;
     int left_clock;
 };
 

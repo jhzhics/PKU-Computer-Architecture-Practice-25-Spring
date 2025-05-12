@@ -531,6 +531,10 @@ size_t CacheNonBlocking::single_read(size_t set_index, size_t tag, size_t len)
     auto &list = m_cache_table[set_index];
     auto it = look_up(list, tag);
     assert(config.evict_policy == EvictPolicy::LRU && "Other eviction policies are not implemented");
+    if (int cycle = conflict_cycle(form_addr(tag, set_index)); cycle > 0)
+    {
+        return config.hit_latency + cycle;
+    }
     if (it != list.end())
     {
         // Hit 
@@ -546,16 +550,12 @@ size_t CacheNonBlocking::single_read(size_t set_index, size_t tag, size_t len)
         size_t extra_latency = m_next_cache->config.bus_latency + m_next_cache->read(form_addr(tag, set_index), config.block_size);
         CacheEntry entry{tag, false, true};
         extra_latency += evict(set_index, entry);
-        if (int cycle = conflict_cycle(form_addr(tag, set_index)); cycle > 0)
-        {
-            extra_latency = cycle;
-        }
-        else if (MSHR *mshr = find_available_mshr(); mshr) {
+        if (MSHR *mshr = find_available_mshr(); mshr) {
             mshr->valid = true;
             mshr->addr = form_addr(tag, set_index);
             mshr->left_clock = config.hit_latency + extra_latency;
             extra_latency = 0;
-            m_hit_under_miss++;       
+            m_hit_under_miss++;
         }
         return config.hit_latency + extra_latency;
     }
@@ -569,6 +569,10 @@ size_t CacheNonBlocking::single_write(size_t set_index, size_t tag, size_t len)
     auto it = look_up(list, tag);
     assert(config.evict_policy == EvictPolicy::LRU && "Other eviction policies are not implemented");
     assert(m_next_cache != nullptr);
+    if (int cycle = conflict_cycle(form_addr(tag, set_index)); cycle > 0)
+    {
+        return config.hit_latency + cycle;
+    }
     if (it != list.end())
     {
         // Hit
@@ -622,11 +626,7 @@ size_t CacheNonBlocking::single_write(size_t set_index, size_t tag, size_t len)
             assert(false && "Invalid write miss policy");
             break;
         }
-        if (int cycle = conflict_cycle(form_addr(tag, set_index)); cycle > 0)
-        {
-            extra_latency = cycle;
-        }
-        else if (MSHR *mshr = find_available_mshr(); mshr) {
+        if (MSHR *mshr = find_available_mshr(); mshr) {
             mshr->valid = true;
             mshr->addr = form_addr(tag, set_index);
             mshr->left_clock = config.hit_latency + extra_latency;
@@ -997,6 +997,10 @@ size_t CacheFinal::single_read(size_t set_index, size_t tag, size_t len)
     size_t latency = 0;
     bool miss = false;
     assert(config.evict_policy == EvictPolicy::LRU && "Other eviction policies are not implemented");
+    if (int cycle = conflict_cycle(form_addr(tag, set_index)); cycle > 0)
+    {
+        return config.hit_latency + cycle;
+    }
     if (it != list.end())
     {
         // Hit 
@@ -1025,11 +1029,7 @@ size_t CacheFinal::single_read(size_t set_index, size_t tag, size_t len)
         size_t extra_latency = m_next_cache->config.bus_latency + m_next_cache->read(form_addr(tag, set_index), config.block_size);
         CacheEntry entry{tag, false, true};
         extra_latency += evict(set_index, entry);
-        if (int cycle = conflict_cycle(form_addr(tag, set_index)); cycle > 0)
-        {
-            extra_latency = cycle;
-        }
-        else if (MSHR *mshr = find_available_mshr(); mshr) {
+        if (MSHR *mshr = find_available_mshr(); mshr) {
             mshr->valid = true;
             mshr->addr = form_addr(tag, set_index);
             mshr->left_clock = config.hit_latency + extra_latency;
@@ -1057,6 +1057,10 @@ size_t CacheFinal::single_write(size_t set_index, size_t tag, size_t len)
     bool miss = false;
     assert(config.evict_policy == EvictPolicy::LRU && "Other eviction policies are not implemented");
     assert(m_next_cache != nullptr);
+    if (int cycle = conflict_cycle(form_addr(tag, set_index)); cycle > 0)
+    {
+        return config.hit_latency + cycle;
+    }
     if (it != list.end())
     {
         // Hit
@@ -1124,11 +1128,7 @@ size_t CacheFinal::single_write(size_t set_index, size_t tag, size_t len)
             break;
         }
 
-        if (int cycle = conflict_cycle(form_addr(tag, set_index)); cycle > 0)
-        {
-            extra_latency = cycle;
-        }
-        else if (MSHR *mshr = find_available_mshr(); mshr) {
+        if (MSHR *mshr = find_available_mshr(); mshr) {
             mshr->valid = true;
             mshr->addr = form_addr(tag, set_index);
             mshr->left_clock = config.hit_latency + extra_latency;
