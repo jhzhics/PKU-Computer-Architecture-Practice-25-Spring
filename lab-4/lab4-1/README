@@ -1,0 +1,13 @@
+# Build
+```bash
+make
+```
+
+Copy dem1.yuv and dem2.yuv to the same directory of the executable.(Build)
+
+# Usage
+1. part2
+`./part2_trival dem1.yuv`
+
+2. part3
+`./part3_trival`
