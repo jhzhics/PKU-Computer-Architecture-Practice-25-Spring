@@ -20,28 +20,8 @@ void process2(uint8_t alpha1, uint8_t alpha2, uint8_t *rgb_buffer1, uint8_t *rgb
 {
     char file_name[32]; // Increased buffer size for filename
     sprintf(file_name, "%d.yuv", static_cast<int>(alpha2)); // Cast alpha for sprintf
-
-    // Open/create and truncate the output YUV file
-    int fd = open(file_name, O_RDWR | O_CREAT | O_TRUNC, 0666);
-    if (fd == -1) {
-        perror("process2_avx2: Failed to open/create YUV file");
-        return;
-    }
-
-    long yuv_file_size = static_cast<long>(width) * height * 3 / 2;
-    if (ftruncate(fd, yuv_file_size) == -1) {
-        perror("process2_avx2: Failed to ftruncate YUV file");
-        close(fd);
-        return;
-    }
-
-    // Memory map the YUV file
-    void *yuv_mmap_addr = mmap(NULL, yuv_file_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if (yuv_mmap_addr == MAP_FAILED) {
-        perror("process2_avx2: Failed to mmap YUV file");
-        close(fd);
-        return;
-    }
+    void *yuv_mmap_addr = malloc(width * height * 3 / 2);
+    clk.start();
 
     // Pointers to Y, U, V planes in the memory-mapped file
     uint8_t *y_plane_out = static_cast<uint8_t *>(yuv_mmap_addr);
@@ -193,16 +173,16 @@ void process2(uint8_t alpha1, uint8_t alpha2, uint8_t *rgb_buffer1, uint8_t *rgb
         }
     }
 
-    // Synchronize memory-mapped file and clean up
-    if (msync(yuv_mmap_addr, yuv_file_size, MS_SYNC) == -1) {
-        perror("process2_avx2: Failed to msync YUV file");
-    }
-    munmap(yuv_mmap_addr, yuv_file_size);
-    close(fd);
+    clk.stop();
+    FILE *fp = fopen(file_name, "wb");
+    fwrite(yuv_mmap_addr, 1, width * height * 3 / 2, fp);
+    fclose(fp);
+    free(yuv_mmap_addr);
 }
 
 void process1(uint8_t *yuv_buffer, uint8_t *rgb_buffer)
 {
+    clk.start();
     uint8_t *y_plane = yuv_buffer;
     uint8_t *u_plane = y_plane + width * height;
     uint8_t *v_plane = u_plane + (width * height) / 4;
@@ -328,17 +308,17 @@ void process1(uint8_t *yuv_buffer, uint8_t *rgb_buffer)
             _mm_storeu_si64(reinterpret_cast<void*>(b_plane_out + y_idx), b_epi8);
         }
     }
+    clk.stop();
 }
 
 int main(int, char *argv[])
 {
-    struct timeval start, end;
-
-    gettimeofday(&start, NULL); // Record start time
-    int fd1 = open(file1, O_RDONLY);
-    void *yuv_buffer1 = mmap(NULL, width * height * 3 / 2, PROT_READ, MAP_PRIVATE, fd1, 0);
-    int fd2 = open(file2, O_RDONLY);
-    void *yuv_buffer2 = mmap(NULL, width * height * 3 / 2, PROT_READ, MAP_PRIVATE, fd2, 0);
+    FILE *fp1 = fopen(file1, "rb");
+    FILE *fp2 = fopen(file2, "rb");
+    void *yuv_buffer1 = malloc(width * height * 3 / 2);
+    void *yuv_buffer2 = malloc(width * height * 3 / 2);
+    fread(yuv_buffer1, 1, width * height * 3 / 2, fp1);
+    fread(yuv_buffer2, 1, width * height * 3 / 2, fp2);
     void *rgb_buffer1 = malloc(width * height * 3);
     void *rgb_buffer2 = malloc(width * height * 3);
     process1((uint8_t *)yuv_buffer1, (uint8_t *)rgb_buffer1);
@@ -349,19 +329,12 @@ int main(int, char *argv[])
         process2(255 - alpha, alpha, (uint8_t *)rgb_buffer1, (uint8_t *)rgb_buffer2);
     }
 
-    munmap(yuv_buffer1, 0);
-    close(fd1);
     free(rgb_buffer1);
+    free(rgb_buffer2);
+    free(yuv_buffer1);
+    free(yuv_buffer2);
+    fclose(fp1);
+    fclose(fp2);
 
-    gettimeofday(&end, NULL); // Record end time
-
-    long seconds = end.tv_sec - start.tv_sec;
-    long microseconds = end.tv_usec - start.tv_usec;
-    if (microseconds < 0) {
-        seconds--;
-        microseconds += 1000000;
-    }
-    double elapsed = seconds + microseconds / 1000000.0;
-
-    printf("Elapsed time: %f seconds\n", elapsed);
+    printf("Elapsed time: %f ms\n", clk.elapsed_time);
 }

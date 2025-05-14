@@ -4,6 +4,8 @@
  */
 
 #pragma once
+#include <chrono>
+
 namespace BT601
 {
     struct Entry
@@ -26,3 +28,19 @@ namespace BT601
         { -276.836f, 298.082f / 256, 516.412f / 256, 0.0f }
     };
 }
+
+
+struct Clock
+{
+    std::chrono::high_resolution_clock::time_point begin;
+    double elapsed_time = 0;
+    inline void start()
+    {
+        begin = std::chrono::high_resolution_clock::now();
+    }
+    inline void stop()
+    {
+        auto end = std::chrono::high_resolution_clock::now();
+        elapsed_time += std::chrono::duration<double, std::milli>(end - begin).count();
+    }
+} clk;

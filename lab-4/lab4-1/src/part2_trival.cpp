@@ -6,9 +6,9 @@
 #include <cstdio>
 #include <sys/time.h>
 #include <algorithm>
+#include <chrono>
 
 #include "standard.hpp"
-
 
 constexpr int width = 1920;
 constexpr int height = 1080;
@@ -17,17 +17,15 @@ void process2(uint8_t alpha, uint8_t *rgb_buffer)
 {
     char file_name[20];
     sprintf(file_name, "%d.yuv", alpha);
-    int fd = open(file_name, O_RDWR | O_CREAT, 0666);
-    ftruncate(fd, width * height * 3 / 2);
-    void *yuv_buffer = mmap(NULL, width * height * 3 / 2, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    void *yuv_buffer = malloc(width * height * 3 / 2);
 
+    clk.start();
     uint8_t *y = (uint8_t *)yuv_buffer;
     uint8_t *u = y + width * height;
     uint8_t *v = u + (width * height) / 4;
     uint8_t *r = (uint8_t *)rgb_buffer;
     uint8_t *g = r + width * height;
     uint8_t *b = g + width * height;
-
     for (int i = 0; i < height; ++i)
     {
         for (int j = 0; j < width; ++j)
@@ -49,13 +47,17 @@ void process2(uint8_t alpha, uint8_t *rgb_buffer)
             }
         }
     }
-    msync(yuv_buffer, width * height * 3 / 2, MS_SYNC);
-    munmap(yuv_buffer, width * height * 3 / 2);
-    close(fd);
+    clk.stop();
+    
+    FILE *fp = fopen(file_name, "wb");
+    fwrite(yuv_buffer, 1, width * height * 3 / 2, fp);
+    fclose(fp);
+    free(yuv_buffer);
 }
 
 void process1(uint8_t *yuv_buffer, uint8_t *rgb_buffer)
 {
+    clk.start();
     uint8_t *y = (uint8_t *)yuv_buffer;
     uint8_t *u = y + width * height;
     uint8_t *v = u + (width * height) / 4;
@@ -81,16 +83,15 @@ void process1(uint8_t *yuv_buffer, uint8_t *rgb_buffer)
             b[y_index] = std::clamp(b_value, 0.0f, 255.0f);
         }
     }
+    clk.stop();
 }
 
 int main(int, char *argv[])
 {
-    struct timeval start, end;
-
-    gettimeofday(&start, NULL); // Record start time
     const char *filename = argv[1];
-    int fd = open(filename, O_RDONLY);
-    void *yuv_buffer = mmap(NULL, width * height * 3 / 2, PROT_READ, MAP_PRIVATE, fd, 0);
+    FILE *fp = fopen(filename, "rb");
+    void *yuv_buffer = malloc(width * height * 3 / 2);
+    fread(yuv_buffer, 1, width * height * 3 / 2, fp);
     void *rgb_buffer = malloc(width * height * 3);
     process1((uint8_t *)yuv_buffer, (uint8_t *)rgb_buffer);
 
@@ -98,20 +99,8 @@ int main(int, char *argv[])
     {
         process2(alpha, (uint8_t *)rgb_buffer);
     }
-
-    munmap(yuv_buffer, 0);
-    close(fd);
+    fclose(fp);
     free(rgb_buffer);
-
-    gettimeofday(&end, NULL); // Record end time
-
-    long seconds = end.tv_sec - start.tv_sec;
-    long microseconds = end.tv_usec - start.tv_usec;
-    if (microseconds < 0) {
-        seconds--;
-        microseconds += 1000000;
-    }
-    double elapsed = seconds + microseconds / 1000000.0;
-
-    printf("Elapsed time: %f seconds\n", elapsed);
+    free(yuv_buffer);
+    printf("Elapsed time: %f ms\n", clk.elapsed_time);
 }
