@@ -83,8 +83,6 @@ void process1(uint8_t *yuv_buffer, uint8_t *rgb_buffer)
     }
 }
 
-
-
 int main(int, char *argv[])
 {
     struct timeval start, end;
