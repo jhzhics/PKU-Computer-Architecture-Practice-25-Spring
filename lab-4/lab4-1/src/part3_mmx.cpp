@@ -9,21 +9,25 @@
 #include <mmintrin.h>
 
 static const int YUV2RGB[3][3] = {
-    {298, 0, 409},
-    {298, -100, -208},
-    {298, 516, 0}};
+    { 298, 0, 409 },
+    { 298, -100, -208 },
+    { 298, 516, 0 }
+};
 static const int RGB2YUV[3][3] = {
-    {66, 129, 25},
-    {-38, -74, 112},
-    {112, -94, -18}};
+    { 66, 129, 25 },
+    { -38, -74, 112 },
+    { 112, -94, -18 }
+};
 
 constexpr int width = 1920;
 constexpr int height = 1080;
+static const char *file1 = "dem1.yuv";
+static const char *file2 = "dem2.yuv";
 
-void process2(uint8_t alpha, uint8_t *rgb_buffer)
+void process2(uint8_t alpha1, uint alpha2,uint8_t *rgb_buffer1, uint8_t *rgb_buffer2)
 {
     char file_name[20];
-    sprintf(file_name, "%d.yuv", alpha);
+    sprintf(file_name, "%d.yuv", alpha2);
     int fd = open(file_name, O_RDWR | O_CREAT, 0666);
     ftruncate(fd, width * height * 3 / 2);
     void *yuv_buffer = mmap(NULL, width * height * 3 / 2, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
@@ -31,30 +35,49 @@ void process2(uint8_t alpha, uint8_t *rgb_buffer)
     uint8_t *y = (uint8_t *)yuv_buffer;
     uint8_t *u = y + width * height;
     uint8_t *v = u + (width * height) / 4;
-    uint8_t *r = (uint8_t *)rgb_buffer;
-    uint8_t *g = r + width * height;
-    uint8_t *b = g + width * height;
+    uint8_t *r1 = (uint8_t *)rgb_buffer1;
+    uint8_t *g1 = r1 + width * height;
+    uint8_t *b1= g1 + width * height;
+    uint8_t *r2 = (uint8_t *)rgb_buffer2;
+    uint8_t *g2 = r2 + width * height;
+    uint8_t *b2= g2 + width * height;
 
     __m64 zero = _mm_setzero_si64();
-    __m64 alpha_val = _mm_set1_pi16(alpha + 1);
+    __m64 alpha_val1 = _mm_set1_pi16(alpha1 + 1);
+    __m64 alpha_val2 = _mm_set1_pi16(alpha2 + 1);
     for (int i = 0; i < height; ++i)
     {
         for (int j = 0; j < width; j += 4)
         {
             int y_index = i * width + j;
             int uv_index = (i / 2) * (width / 2) + (j / 2);
-            __m64 r_raw = _mm_cvtsi32_si64(*(int32_t *)&r[y_index]);
-            __m64 g_raw = _mm_cvtsi32_si64(*(int32_t *)&g[y_index]);
-            __m64 b_raw = _mm_cvtsi32_si64(*(int32_t *)&b[y_index]);
+            __m64 r_raw1 = _mm_cvtsi32_si64(*(int32_t *)&r1[y_index]);
+            __m64 g_raw1 = _mm_cvtsi32_si64(*(int32_t *)&g1[y_index]);
+            __m64 b_raw1 = _mm_cvtsi32_si64(*(int32_t *)&b1[y_index]);
             // Convert to 16-bit
-            __m64 r_val = _mm_unpacklo_pi8(r_raw, zero);
-            __m64 g_val = _mm_unpacklo_pi8(g_raw, zero);
-            __m64 b_val = _mm_unpacklo_pi8(b_raw, zero);
+            __m64 r_val1 = _mm_unpacklo_pi8(r_raw1, zero);
+            __m64 g_val1 = _mm_unpacklo_pi8(g_raw1, zero);
+            __m64 b_val1 = _mm_unpacklo_pi8(b_raw1, zero);
             // Apply alpha factor
-            r_val = _mm_mullo_pi16(r_val, alpha_val);
-            g_val = _mm_mullo_pi16(g_val, alpha_val);
-            b_val = _mm_mullo_pi16(b_val, alpha_val);
+            r_val1 = _mm_mullo_pi16(r_val1, alpha_val1);
+            g_val1 = _mm_mullo_pi16(g_val1, alpha_val1);
+            b_val1 = _mm_mullo_pi16(b_val1, alpha_val1);
 
+            __m64 r_raw2 = _mm_cvtsi32_si64(*(int32_t *)&r2[y_index]);
+            __m64 g_raw2 = _mm_cvtsi32_si64(*(int32_t *)&g2[y_index]);
+            __m64 b_raw2 = _mm_cvtsi32_si64(*(int32_t *)&b2[y_index]);
+            // Convert to 16-bit
+            __m64 r_val2 = _mm_unpacklo_pi8(r_raw2, zero);
+            __m64 g_val2 = _mm_unpacklo_pi8(g_raw2, zero);
+            __m64 b_val2 = _mm_unpacklo_pi8(b_raw2, zero);
+            // Apply alpha factor
+            r_val2 = _mm_mullo_pi16(r_val2, alpha_val2);
+            g_val2 = _mm_mullo_pi16(g_val2, alpha_val2);
+            b_val2 = _mm_mullo_pi16(b_val2, alpha_val2);
+
+            __m64 r_val = _mm_add_pi16(r_val1, r_val2);
+            __m64 g_val = _mm_add_pi16(g_val1, g_val2);
+            __m64 b_val = _mm_add_pi16(b_val1, b_val2);
             r_val = _mm_srai_pi16(r_val, 8);
             g_val = _mm_srai_pi16(g_val, 8);
             b_val = _mm_srai_pi16(b_val, 8);
@@ -70,9 +93,7 @@ void process2(uint8_t alpha, uint8_t *rgb_buffer)
             __m64 y_out = _mm_packs_pu16(y_tmp, zero);
 
             // Store Y values (4 pixels)
-            *((int32_t *)&y[y_index]) = _mm_cvtsi64_si32(y_out);
-
-            // For U and V, only compute and store when on the top row of a 2x2 block
+            *((int32_t*)&y[y_index]) = _mm_cvtsi64_si32(y_out);
             if (i % 2 == 0)
             {
                 // U = (R*-38 + G*-74 + B*112) >> 8 + 128
@@ -96,7 +117,7 @@ void process2(uint8_t alpha, uint8_t *rgb_buffer)
                 // Store U and V values
                 u[uv_index] = _mm_cvtsi64_si32(u_out) & 0xFF;
                 v[uv_index] = _mm_cvtsi64_si32(v_out) & 0xFF;
-
+                
                 // For pixel 2
                 u[uv_index + 1] = (_mm_cvtsi64_si32(u_out) >> 16) & 0xFF;
                 v[uv_index + 1] = (_mm_cvtsi64_si32(v_out) >> 16) & 0xFF;
@@ -121,25 +142,23 @@ void process1(uint8_t *yuv_buffer, uint8_t *rgb_buffer)
     __m64 uv_center = _mm_set1_pi16(128);
     __m64 zero = _mm_setzero_si64();
 
-    for (int i = 0; i < height; ++i)
-    {
-        for (int j = 0; j < width; j += 4)
-        {
-            int idx = i * width + j;
-            int uv_idx = (i / 2) * (width / 2) + (j / 2);
+    for (int i = 0; i < height; ++i) {
+        for (int j = 0; j < width; j += 4) {
+            int idx     = i * width + j;
+            int uv_idx  = (i / 2) * (width / 2) + (j / 2);
             // Load Y values (4 pixels) from memory
             __m64 y_raw = _mm_cvtsi32_si64(*(int32_t *)&y_plane[idx]);
             // Convert 8-bit to 16-bit by unpacking with zero
             __m64 y_val = _mm_unpacklo_pi8(y_raw, zero);
-
+            
             // Convert u_raw16 from [a,b] to 32-bit [a,a,b,b]
-            __m64 u_raw = _mm_cvtsi32_si64((int32_t)*(uint16_t *)(u_plane + uv_idx));
-            u_raw = _mm_unpacklo_pi8(u_raw, zero);         // Convert to 16-bit [a,0,b,0]
+            __m64 u_raw = _mm_cvtsi32_si64((int32_t)*(uint16_t*)(u_plane + uv_idx));
+            u_raw = _mm_unpacklo_pi8(u_raw, zero); // Convert to 16-bit [a,0,b,0]
             __m64 u_val = _mm_unpacklo_pi16(u_raw, u_raw); // Duplicate to get [a,a,b,b]
 
             // Convert v_raw16 from [a,b] to 32-bit [a,a,b,b]
-            __m64 v_raw = _mm_cvtsi32_si64((int32_t)*(uint16_t *)(v_plane + uv_idx));
-            v_raw = _mm_unpacklo_pi8(v_raw, zero);         // Convert to 16-bit [a,0,b,0]
+            __m64 v_raw = _mm_cvtsi32_si64((int32_t)*(uint16_t*)(v_plane + uv_idx));
+            v_raw = _mm_unpacklo_pi8(v_raw, zero); // Convert to 16-bit [a,0,b,0]
             __m64 v_val = _mm_unpacklo_pi16(v_raw, v_raw); // Duplicate to get [a,a,b,b]
 
             y_val = _mm_sub_pi16(y_val, y_center);
@@ -175,38 +194,43 @@ void process1(uint8_t *yuv_buffer, uint8_t *rgb_buffer)
             __m64 b_out = _mm_packs_pu16(b_tmp, zero);
 
             // Store results to memory (4 bytes each)
-            *((int32_t *)&r_plane[idx]) = _mm_cvtsi64_si32(r_out);
-            *((int32_t *)&g_plane[idx]) = _mm_cvtsi64_si32(g_out);
-            *((int32_t *)&b_plane[idx]) = _mm_cvtsi64_si32(b_out);
+            *((int32_t*)&r_plane[idx]) = _mm_cvtsi64_si32(r_out);
+            *((int32_t*)&g_plane[idx]) = _mm_cvtsi64_si32(g_out);
+            *((int32_t*)&b_plane[idx]) = _mm_cvtsi64_si32(b_out);
         }
     }
 }
+
+
+
 int main(int, char *argv[])
 {
     struct timeval start, end;
 
     gettimeofday(&start, NULL); // Record start time
-    const char *filename = argv[1];
-    int fd = open(filename, O_RDONLY);
-    void *yuv_buffer = mmap(NULL, width * height * 3 / 2, PROT_READ, MAP_PRIVATE, fd, 0);
-    void *rgb_buffer = malloc(width * height * 3);
-    process1((uint8_t *)yuv_buffer, (uint8_t *)rgb_buffer);
+    int fd1 = open(file1, O_RDONLY);
+    void *yuv_buffer1 = mmap(NULL, width * height * 3 / 2, PROT_READ, MAP_PRIVATE, fd1, 0);
+    int fd2 = open(file2, O_RDONLY);
+    void *yuv_buffer2 = mmap(NULL, width * height * 3 / 2, PROT_READ, MAP_PRIVATE, fd2, 0);
+    void *rgb_buffer1 = malloc(width * height * 3);
+    void *rgb_buffer2 = malloc(width * height * 3);
+    process1((uint8_t *)yuv_buffer1, (uint8_t *)rgb_buffer1);
+    process1((uint8_t *)yuv_buffer2, (uint8_t *)rgb_buffer2);
 
     for (int alpha = 1; alpha < 256; alpha += 3)
     {
-        process2(alpha, (uint8_t *)rgb_buffer);
+        process2(255 - alpha, alpha, (uint8_t *)rgb_buffer1, (uint8_t *)rgb_buffer2);
     }
 
-    munmap(yuv_buffer, 0);
-    close(fd);
-    free(rgb_buffer);
+    munmap(yuv_buffer1, 0);
+    close(fd1);
+    free(rgb_buffer1);
 
     gettimeofday(&end, NULL); // Record end time
 
     long seconds = end.tv_sec - start.tv_sec;
     long microseconds = end.tv_usec - start.tv_usec;
-    if (microseconds < 0)
-    {
+    if (microseconds < 0) {
         seconds--;
         microseconds += 1000000;
     }

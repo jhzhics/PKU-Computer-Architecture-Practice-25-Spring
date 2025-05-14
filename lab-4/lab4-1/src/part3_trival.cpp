@@ -46,11 +46,15 @@ void process2(uint8_t alpha1, uint alpha2,uint8_t *rgb_buffer1, uint8_t *rgb_buf
             float b_val = static_cast<float>(b1[y_index]) * alpha_factor1 + static_cast<float>(b2[y_index]) * alpha_factor2;
 
             float y_val = BT601::RGB2YUV[0].offset + r_val * BT601::RGB2YUV[0].scale1 + g_val * BT601::RGB2YUV[0].scale2 + b_val * BT601::RGB2YUV[0].scale3;
-            float u_val = BT601::RGB2YUV[1].offset + r_val * BT601::RGB2YUV[1].scale1 + g_val * BT601::RGB2YUV[1].scale2 + b_val * BT601::RGB2YUV[1].scale3;
-            float v_val = BT601::RGB2YUV[2].offset + r_val * BT601::RGB2YUV[2].scale1 + g_val * BT601::RGB2YUV[2].scale2 + b_val * BT601::RGB2YUV[2].scale3;
             y[y_index] = std::clamp(y_val, 0.0f, 255.0f);
-            u[uv_index] = std::clamp(u_val, 0.0f, 255.0f);
-            v[uv_index] = std::clamp(v_val, 0.0f, 255.0f);
+
+            if (i % 2 == 0 && j % 2 == 0)
+            {
+                float u_val = BT601::RGB2YUV[1].offset + r_val * BT601::RGB2YUV[1].scale1 + g_val * BT601::RGB2YUV[1].scale2 + b_val * BT601::RGB2YUV[1].scale3;
+                float v_val = BT601::RGB2YUV[2].offset + r_val * BT601::RGB2YUV[2].scale1 + g_val * BT601::RGB2YUV[2].scale2 + b_val * BT601::RGB2YUV[2].scale3;
+                u[uv_index] = std::clamp(u_val, 0.0f, 255.0f);
+                v[uv_index] = std::clamp(v_val, 0.0f, 255.0f);
+            }
         }
     }
     msync(yuv_buffer, width * height * 3 / 2, MS_SYNC);
